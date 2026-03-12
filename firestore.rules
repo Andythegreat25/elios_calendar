@@ -1,0 +1,128 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: profiles
+    // Document ID: {userId}
+    // Fields:
+    //   - uid: string (required, immutable) - User ID
+    //   - displayName: string (required) - User's name
+    //   - color: string (required) - User's calendar color
+    //
+    // Collection: calendars
+    // Document ID: {calendarId}
+    // Fields:
+    //   - id: string (required, immutable) - Calendar ID
+    //   - name: string (required) - Calendar name
+    //   - color: string (required) - Calendar color
+    //   - type: string (required) - 'room', 'user', 'shared'
+    //   - ownerId: string (required, immutable) - Creator's UID
+    //
+    // Collection: events
+    // Document ID: {eventId}
+    // Fields:
+    //   - title: string (required) - Event title
+    //   - date: string (required) - YYYY-MM-DD
+    //   - startTime: string (required) - HH:MM
+    //   - endTime: string (required) - HH:MM
+    //   - calendarId: string (required) - ID of the calendar
+    //   - description: string (optional) - Event description
+    //   - ownerId: string (required, immutable) - Creator's UID
+    //   - createdAt: string (required, immutable) - ISO 8601 date string
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.ownerId;
+    }
+    
+    function uidUnchanged() {
+      return !('ownerId' in request.resource.data) || request.resource.data.ownerId == request.auth.uid;
+    }
+
+    function profileUidUnchanged() {
+      return !('uid' in request.resource.data) || request.resource.data.uid == request.auth.uid;
+    }
+    
+    function areImmutableFieldsUnchanged(fields) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
+    }
+
+    function isValidDateString(dateStr) {
+      return dateStr is string && dateStr.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*Z?$");
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+    function isValidProfile(data) {
+      return data.keys().hasAll(['uid', 'displayName', 'color']) &&
+             data.keys().hasOnly(['uid', 'displayName', 'color']) &&
+             data.uid is string && data.uid.size() > 0 && data.uid.size() < 100 &&
+             data.displayName is string && data.displayName.size() > 0 && data.displayName.size() < 100 &&
+             data.color is string && data.color.size() > 0 && data.color.size() < 20;
+    }
+
+    function isValidCalendar(data) {
+      return data.keys().hasAll(['id', 'name', 'color', 'type', 'ownerId']) &&
+             data.keys().hasOnly(['id', 'name', 'color', 'type', 'ownerId']) &&
+             data.id is string && data.id.size() > 0 && data.id.size() < 100 &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.color is string && data.color.size() > 0 && data.color.size() < 20 &&
+             data.type in ['room', 'user', 'shared'] &&
+             data.ownerId is string && data.ownerId.size() > 0 && data.ownerId.size() < 100;
+    }
+
+    function isValidEvent(data) {
+      return data.keys().hasAll(['title', 'date', 'startTime', 'endTime', 'calendarId', 'ownerId', 'createdAt']) &&
+             data.keys().hasOnly(['title', 'date', 'startTime', 'endTime', 'calendarId', 'description', 'ownerId', 'createdAt']) &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             data.date is string && data.date.size() == 10 &&
+             data.startTime is string && data.startTime.size() == 5 &&
+             data.endTime is string && data.endTime.size() == 5 &&
+             data.calendarId is string && data.calendarId.size() > 0 && data.calendarId.size() < 100 &&
+             (!('description' in data) || (data.description is string && data.description.size() <= 1000)) &&
+             data.ownerId is string && data.ownerId.size() > 0 && data.ownerId.size() < 100 &&
+             data.createdAt is string && isValidDateString(data.createdAt);
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /profiles/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isOwner(userId) && isValidProfile(request.resource.data) && profileUidUnchanged();
+      allow update: if isOwner(userId) && isValidProfile(request.resource.data) && areImmutableFieldsUnchanged(['uid']);
+      allow delete: if isOwner(userId);
+    }
+
+    match /calendars/{calendarId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidCalendar(request.resource.data) && uidUnchanged();
+      allow update: if isDocOwner() && isValidCalendar(request.resource.data) && areImmutableFieldsUnchanged(['id', 'ownerId', 'type']);
+      allow delete: if isDocOwner();
+    }
+
+    match /events/{eventId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidEvent(request.resource.data) && uidUnchanged();
+      allow update: if isDocOwner() && isValidEvent(request.resource.data) && areImmutableFieldsUnchanged(['ownerId', 'createdAt']);
+      allow delete: if isDocOwner();
+    }
+  }
+}

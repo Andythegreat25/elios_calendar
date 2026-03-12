@@ -1,0 +1,58 @@
+{
+  "entities": {
+    "Profile": {
+      "title": "Profile",
+      "description": "Public user profile for the calendar",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "displayName": { "type": "string" },
+        "color": { "type": "string" }
+      },
+      "required": ["uid", "displayName", "color"]
+    },
+    "Calendar": {
+      "title": "Calendar",
+      "description": "A calendar resource (e.g., a room or a shared calendar)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "color": { "type": "string" },
+        "type": { "type": "string", "enum": ["room", "user", "shared"] },
+        "ownerId": { "type": "string" }
+      },
+      "required": ["id", "name", "color", "type", "ownerId"]
+    },
+    "Event": {
+      "title": "Event",
+      "description": "A calendar event",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "startTime": { "type": "string" },
+        "endTime": { "type": "string" },
+        "calendarId": { "type": "string" },
+        "description": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "date", "startTime", "endTime", "calendarId", "ownerId", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/profiles/{userId}": {
+      "schema": { "$ref": "#/entities/Profile" },
+      "description": "Public profiles of users"
+    },
+    "/calendars/{calendarId}": {
+      "schema": { "$ref": "#/entities/Calendar" },
+      "description": "Shared calendars and rooms"
+    },
+    "/events/{eventId}": {
+      "schema": { "$ref": "#/entities/Event" },
+      "description": "Events on the calendars"
+    }
+  }
+}
