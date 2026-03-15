@@ -1,0 +1,13 @@
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+
+# Variabili d'ambiente (contengono credenziali)
+.env*
+!.env.example
+
+# Config Firebase generata da AI Studio (migrata in .env)
+firebase-applet-config.json
