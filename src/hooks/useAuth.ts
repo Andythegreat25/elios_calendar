@@ -1,25 +1,26 @@
 import { useEffect, useState } from 'react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { auth } from '@/firebase';
-import { loginWithGoogle, logout } from '@/services/auth.service';
+import {
+  loginWithGoogle,
+  loginWithEmail,
+  registerWithEmail,
+  humanizeAuthError,
+  logout,
+} from '@/services/auth.service';
 
 interface UseAuthReturn {
   user: User | null;
-  /** True finché Firebase non ha determinato lo stato iniziale di auth */
   isAuthReady: boolean;
   isLoggingIn: boolean;
   login: () => Promise<void>;
+  loginEmail: (email: string, password: string, remember: boolean) => Promise<void>;
+  registerEmail: (email: string, password: string) => Promise<void>;
   logoutUser: () => Promise<void>;
   error: string | null;
+  clearError: () => void;
 }
 
-/**
- * Gestisce lo stato di autenticazione Firebase.
- *
- * - Sottoscrive a onAuthStateChanged per reagire a login/logout esterni
- * - Espone login (Google OAuth) e logout
- * - `isAuthReady` è false solo durante il check iniziale (evita flash della login screen)
- */
 export function useAuth(): UseAuthReturn {
   const [user, setUser] = useState<User | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
@@ -39,10 +40,35 @@ export function useAuth(): UseAuthReturn {
     setError(null);
     try {
       await loginWithGoogle();
-      // onAuthStateChanged aggiornerà lo stato automaticamente
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Errore durante il login';
-      setError(message);
+    } catch (err: unknown) {
+      const code = (err as { code?: string }).code ?? '';
+      setError(humanizeAuthError(code));
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  const loginEmail = async (email: string, password: string, remember: boolean) => {
+    setIsLoggingIn(true);
+    setError(null);
+    try {
+      await loginWithEmail(email, password, remember);
+    } catch (err: unknown) {
+      const code = (err as { code?: string }).code ?? '';
+      setError(humanizeAuthError(code));
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  const registerEmail = async (email: string, password: string) => {
+    setIsLoggingIn(true);
+    setError(null);
+    try {
+      await registerWithEmail(email, password);
+    } catch (err: unknown) {
+      const code = (err as { code?: string }).code ?? '';
+      setError(humanizeAuthError(code));
     } finally {
       setIsLoggingIn(false);
     }
@@ -52,11 +78,13 @@ export function useAuth(): UseAuthReturn {
     setError(null);
     try {
       await logout();
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Errore durante il logout';
-      setError(message);
+    } catch (err: unknown) {
+      const code = (err as { code?: string }).code ?? '';
+      setError(humanizeAuthError(code));
     }
   };
 
-  return { user, isAuthReady, isLoggingIn, login, logoutUser, error };
+  const clearError = () => setError(null);
+
+  return { user, isAuthReady, isLoggingIn, login, loginEmail, registerEmail, logoutUser, error, clearError };
 }
