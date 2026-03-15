@@ -5,6 +5,9 @@ import {
   setDoc,
   updateDoc,
   deleteDoc,
+  getDocs,
+  query,
+  where,
   type Unsubscribe,
 } from 'firebase/firestore';
 import { db } from '@/firebase';
@@ -90,3 +93,25 @@ export function personalCalendarId(uid: string): string {
  * Essendo condivisa, deve avere un ID stabile.
  */
 export const MEETING_ROOM_ID = 'room_sala-riunioni';
+
+/**
+ * Rimuove i calendari duplicati per evitare conflitti.
+ * - Rimuove tutte le sale riunioni tranne quella con MEETING_ROOM_ID
+ * - Rimuove tutti i calendari personali duplicati per l'utente
+ */
+export async function cleanupDuplicateCalendars(userId: string): Promise<void> {
+  // Remove duplicate rooms (any room not matching MEETING_ROOM_ID)
+  const roomsSnap = await getDocs(query(collection(db, CALENDARS_COLLECTION), where('type', '==', 'room')));
+  for (const d of roomsSnap.docs) {
+    if (d.id !== MEETING_ROOM_ID) {
+      await deleteDoc(doc(db, CALENDARS_COLLECTION, d.id));
+    }
+  }
+  // Remove duplicate personal calendars for this user
+  const userCalSnap = await getDocs(query(collection(db, CALENDARS_COLLECTION), where('type', '==', 'user'), where('ownerId', '==', userId)));
+  for (const d of userCalSnap.docs) {
+    if (d.id !== personalCalendarId(userId)) {
+      await deleteDoc(doc(db, CALENDARS_COLLECTION, d.id));
+    }
+  }
+}

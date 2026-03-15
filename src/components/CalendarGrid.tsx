@@ -3,6 +3,7 @@ import { format, isSameDay, addDays, startOfWeek, isToday } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { cn } from '@/utils/cn';
 import { generateTimeSlots, getEventPosition } from '@/utils/date';
+import { expandEventsForRange } from '@/utils/recurrence';
 
 interface CalendarGridProps {
   currentDate: Date;
@@ -26,7 +27,11 @@ export function CalendarGrid({
   const visibleCalendarIds = new Set(
     calendars.filter((c) => c.visible !== false).map((c) => c.id),
   );
-  const visibleEvents = events.filter((e) => visibleCalendarIds.has(e.calendarId));
+  const visibleEvents = expandEventsForRange(
+    events.filter(e => visibleCalendarIds.has(e.calendarId)),
+    days[0],
+    days[days.length - 1],
+  );
 
   return (
     <div className="flex flex-col h-full bg-white overflow-hidden">

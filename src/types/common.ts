@@ -1,9 +1,10 @@
 /**
  * Vista del calendario attiva.
- * - "day"  → mostra un singolo giorno
- * - "week" → mostra 7 giorni da lunedì
+ * - "day"   → mostra un singolo giorno
+ * - "week"  → mostra 7 giorni da lunedì
+ * - "month" → mostra l'intero mese
  */
-export type ViewType = 'day' | 'week';
+export type ViewType = 'day' | 'week' | 'month';
 
 /**
  * Rappresenta uno slot temporale selezionato nel grid

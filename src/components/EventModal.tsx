@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import type { CalendarEvent, Calendar } from '@/types';
+import type { CalendarEvent, Calendar, RecurrenceType } from '@/types';
 import { format } from 'date-fns';
-import { X, Clock, Calendar as CalendarIcon, AlignLeft, Trash2 } from 'lucide-react';
+import { X, Clock, Calendar as CalendarIcon, AlignLeft, Trash2, Repeat2 } from 'lucide-react';
 import { Spinner } from '@/components/ui/Spinner';
 
 interface EventModalProps {
@@ -29,6 +29,7 @@ export function EventModal({
   const [endTime, setEndTime] = useState('09:00');
   const [calendarId, setCalendarId] = useState(calendars[0]?.id || '');
   const [description, setDescription] = useState('');
+  const [recurrence, setRecurrence] = useState<RecurrenceType>('none');
 
   useEffect(() => {
     if (!isOpen) return;
@@ -40,6 +41,7 @@ export function EventModal({
       setEndTime(editEvent.endTime);
       setCalendarId(editEvent.calendarId);
       setDescription(editEvent.description || '');
+      setRecurrence(editEvent.recurrence ?? 'none');
     } else {
       setTitle('');
       setDate(initialDate ? format(initialDate, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'));
@@ -53,6 +55,7 @@ export function EventModal({
       }
       setCalendarId(calendars[0]?.id || '');
       setDescription('');
+      setRecurrence('none');
     }
   }, [isOpen, initialDate, initialTime, calendars, editEvent]);
 
@@ -73,6 +76,7 @@ export function EventModal({
       endTime,
       calendarId,
       description,
+      recurrence,
     };
 
     if (editEvent && onUpdate) {
@@ -163,6 +167,29 @@ export function EventModal({
                 ))}
               </select>
             </div>
+
+            {/* Ricorrenza */}
+            <div className="flex items-center gap-4">
+              <Repeat2 className="w-5 h-5 text-zinc-400 flex-shrink-0" />
+              <select
+                value={recurrence}
+                onChange={(e) => setRecurrence(e.target.value as RecurrenceType)}
+                disabled={!isOwner}
+                className="flex-1 bg-zinc-50/50 border border-zinc-200/60 text-zinc-900 text-sm rounded-2xl px-4 py-3 disabled:opacity-70 transition-all font-medium appearance-none"
+              >
+                <option value="none">Non si ripete</option>
+                <option value="daily">Ogni giorno</option>
+                <option value="weekly">Ogni settimana</option>
+                <option value="monthly">Ogni mese</option>
+              </select>
+            </div>
+
+            {/* Banner ricorrenza modifica */}
+            {editEvent && editEvent.recurrence && editEvent.recurrence !== 'none' && (
+              <div className="bg-blue-50 border border-blue-200/50 rounded-2xl px-4 py-3 text-sm text-blue-700 font-medium">
+                Stai modificando tutte le occorrenze
+              </div>
+            )}
 
             {/* Descrizione */}
             <div className="flex items-start gap-4">

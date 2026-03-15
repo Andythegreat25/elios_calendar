@@ -1,11 +1,13 @@
 import { useState, useCallback } from 'react';
 import type { User } from 'firebase/auth';
-import { format, addWeeks, subWeeks, addDays, subDays } from 'date-fns';
+import { format, addWeeks, subWeeks, addDays, subDays, addMonths, subMonths } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { cn } from '@/utils/cn';
 
 import { Sidebar } from '@/components/Sidebar';
 import { CalendarGrid } from '@/components/CalendarGrid';
+import { MonthView } from '@/components/MonthView';
 import { EventModal } from '@/components/EventModal';
 import { SettingsModal } from '@/components/SettingsModal';
 import { Toast } from '@/components/ui/Toast';
@@ -14,6 +16,7 @@ import { useProfiles } from '@/hooks/useProfiles';
 import { useCalendars } from '@/hooks/useCalendars';
 import { useEvents } from '@/hooks/useEvents';
 import { useAuth } from '@/hooks/useAuth';
+import { useNotifications } from '@/hooks/useNotifications';
 
 import type { CalendarEvent, SelectedSlot, ViewType } from '@/types';
 
@@ -39,6 +42,9 @@ export function CalendarPage({ user }: CalendarPageProps) {
   const { calendars, toggleCalendarVisibility, changeCalendarColor, error: calError, clearError: clearCalError } = useCalendars(user, currentProfile);
   const { events, isSaving, addEvent, editEvent: updateEvent, removeEvent, error: eventError, clearError } = useEvents(user);
 
+  // ─── Notifiche browser ──────────────────────────────────────────────────────
+  useNotifications(events);
+
   // ─── Stato UI locale ───────────────────────────────────────────────────────
   const [currentDate, setCurrentDate] = useState(new Date());
   const [view, setView] = useState<ViewType>('week');
@@ -57,11 +63,19 @@ export function CalendarPage({ user }: CalendarPageProps) {
 
   // ─── Navigazione ───────────────────────────────────────────────────────────
   const handlePrev = useCallback(() => {
-    setCurrentDate((d) => view === 'week' ? subWeeks(d, 1) : subDays(d, 1));
+    setCurrentDate((d) => {
+      if (view === 'week') return subWeeks(d, 1);
+      if (view === 'month') return subMonths(d, 1);
+      return subDays(d, 1);
+    });
   }, [view]);
 
   const handleNext = useCallback(() => {
-    setCurrentDate((d) => view === 'week' ? addWeeks(d, 1) : addDays(d, 1));
+    setCurrentDate((d) => {
+      if (view === 'week') return addWeeks(d, 1);
+      if (view === 'month') return addMonths(d, 1);
+      return addDays(d, 1);
+    });
   }, [view]);
 
   const handleToday = useCallback(() => setCurrentDate(new Date()), []);
@@ -176,9 +190,9 @@ export function CalendarPage({ user }: CalendarPageProps) {
               </div>
             </div>
 
-            {/* Toggle vista giorno/settimana */}
+            {/* Toggle vista giorno/settimana/mese */}
             <div className="flex items-center bg-zinc-100/50 p-1 rounded-full border border-zinc-200/50">
-              {(['day', 'week'] as ViewType[]).map((v) => (
+              {(['day', 'week', 'month'] as ViewType[]).map((v) => (
                 <button
                   key={v}
                   onClick={() => setView(v)}
@@ -188,22 +202,32 @@ export function CalendarPage({ user }: CalendarPageProps) {
                       : 'text-zinc-500 hover:text-zinc-900'
                   }`}
                 >
-                  {v === 'day' ? 'Giorno' : 'Settimana'}
+                  {v === 'day' ? 'Giorno' : v === 'week' ? 'Settimana' : 'Mese'}
                 </button>
               ))}
             </div>
           </header>
 
           {/* Calendar grid */}
-          <div className="flex-1 p-6 overflow-hidden">
-            <CalendarGrid
-              currentDate={currentDate}
-              view={view}
-              events={events}
-              calendars={calendars}
-              onSlotClick={handleSlotClick}
-              onEventClick={handleEventClick}
-            />
+          <div className={cn(view === 'month' ? 'flex-1 overflow-hidden' : 'flex-1 p-6 overflow-hidden')}>
+            {view === 'month' ? (
+              <MonthView
+                currentDate={currentDate}
+                events={events}
+                calendars={calendars}
+                onSlotClick={handleSlotClick}
+                onEventClick={handleEventClick}
+              />
+            ) : (
+              <CalendarGrid
+                currentDate={currentDate}
+                view={view}
+                events={events}
+                calendars={calendars}
+                onSlotClick={handleSlotClick}
+                onEventClick={handleEventClick}
+              />
+            )}
           </div>
         </main>
       </div>

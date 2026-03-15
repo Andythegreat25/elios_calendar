@@ -29,6 +29,7 @@ function toFirestoreEvent(event: Omit<CalendarEvent, 'id'>): FirestoreEvent {
     description: event.description,
     ownerId:     event.ownerId,
     createdAt:   event.createdAt,
+    recurrence:  event.recurrence ?? 'none',
   };
 }
 
@@ -50,6 +51,7 @@ function fromFirestoreEvent(id: string, data: FirestoreEvent): CalendarEvent {
     description: data.description,
     ownerId:     data.ownerId,
     createdAt:   data.createdAt,
+    recurrence:  data.recurrence ?? 'none',
   };
 }
 
@@ -86,6 +88,7 @@ export async function updateEvent(
   if (updates.endTime     !== undefined) firestoreUpdates.endTime     = updates.endTime;
   if (updates.calendarId  !== undefined) firestoreUpdates.calendarId  = updates.calendarId;
   if (updates.date        !== undefined) firestoreUpdates.date        = format(updates.date, 'yyyy-MM-dd');
+  if (updates.recurrence  !== undefined) firestoreUpdates.recurrence  = updates.recurrence;
 
   await updateDoc(ref, firestoreUpdates);
 }

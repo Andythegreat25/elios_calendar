@@ -1,4 +1,9 @@
 /**
+ * Tipo di ricorrenza per gli eventi.
+ */
+export type RecurrenceType = 'none' | 'daily' | 'weekly' | 'monthly';
+
+/**
  * Rappresenta un evento nel calendario — versione UI.
  * Il campo `date` è un oggetto Date per comodità nei componenti.
  *
@@ -19,6 +24,8 @@ export interface CalendarEvent {
   ownerId: string;
   /** ISO 8601 timestamp di creazione */
   createdAt: string;
+  /** Tipo di ricorrenza dell'evento */
+  recurrence?: RecurrenceType;
 }
 
 /**
@@ -35,4 +42,6 @@ export interface FirestoreEvent {
   description?: string;
   ownerId: string;
   createdAt: string;
+  /** Tipo di ricorrenza dell'evento */
+  recurrence?: RecurrenceType;
 }

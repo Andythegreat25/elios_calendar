@@ -7,6 +7,7 @@ import {
   updateCalendar,
   personalCalendarId,
   MEETING_ROOM_ID,
+  cleanupDuplicateCalendars,
 } from '@/services/calendars.service';
 
 interface UseCalendarsReturn {
@@ -68,6 +69,7 @@ export function useCalendars(
           type:    'room',
           ownerId: user.uid,
         });
+        await cleanupDuplicateCalendars(user.uid);
       } catch (err) {
         console.error('[useCalendars] initCalendars error:', err);
         setError(err instanceof Error ? err.message : 'Errore inizializzazione calendari');
