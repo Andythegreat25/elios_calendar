@@ -27,11 +27,15 @@ export function CalendarGrid({
   const visibleCalendarIds = new Set(
     calendars.filter((c) => c.visible !== false).map((c) => c.id),
   );
-  const visibleEvents = expandEventsForRange(
-    events.filter(e => visibleCalendarIds.has(e.calendarId)),
-    days[0],
-    days[days.length - 1],
-  );
+
+  // Gli eventi interni rispettano il toggle visibilità; quelli esterni (Outlook) sono sempre visibili.
+  const internalEvents = events.filter((e) => !e.isExternal && visibleCalendarIds.has(e.calendarId));
+  const externalEvents = events.filter((e) => e.isExternal);
+
+  const visibleEvents = [
+    ...expandEventsForRange(internalEvents, days[0], days[days.length - 1]),
+    ...expandEventsForRange(externalEvents, days[0], days[days.length - 1]),
+  ];
 
   return (
     <div className="flex flex-col h-full bg-white overflow-hidden">
@@ -113,7 +117,35 @@ export function CalendarGrid({
                   {/* Eventi posizionati in assoluto */}
                   {dayEvents.map((event) => {
                     const { top, height } = getEventPosition(event.startTime, event.endTime);
-                    const calendar = calendars.find((c) => c.id === event.calendarId);
+                    const calendar = !event.isExternal
+                      ? calendars.find((c) => c.id === event.calendarId)
+                      : null;
+                    const color = event.isExternal
+                      ? (event.ownerColor ?? '#94a3b8')
+                      : (calendar?.color ?? '#a881f3');
+
+                    if (event.isExternal) {
+                      // Evento Outlook: stile striato, read-only, nessun click
+                      return (
+                        <div
+                          key={event.id}
+                          title={`${event.title}\n${event.startTime}–${event.endTime}`}
+                          className="absolute left-1.5 right-1.5 rounded-xl p-2 text-xs overflow-hidden cursor-default opacity-75 border"
+                          style={{
+                            top: `${top}px`,
+                            height: `${Math.max(height, 20)}px`,
+                            background: `repeating-linear-gradient(45deg, ${color}18, ${color}18 4px, ${color}08 4px, ${color}08 8px)`,
+                            borderColor: `${color}60`,
+                            borderLeft: `3px solid ${color}`,
+                          }}
+                        >
+                          <div className="font-medium truncate italic text-zinc-500">
+                            {event.title}
+                          </div>
+                        </div>
+                      );
+                    }
+
                     return (
                       <div
                         key={event.id}
@@ -125,7 +157,7 @@ export function CalendarGrid({
                         style={{
                           top: `${top}px`,
                           height: `${Math.max(height, 24)}px`,
-                          backgroundColor: `${calendar?.color ?? '#a881f3'}33`,
+                          backgroundColor: `${color}33`,
                           color: '#18181B',
                         }}
                       >

@@ -30,11 +30,13 @@ export function MonthView({ currentDate, events, calendars, onSlotClick, onEvent
     calendars.filter(c => c.visible !== false).map(c => c.id)
   );
 
-  const expandedEvents = expandEventsForRange(
-    events.filter(e => visibleCalendarIds.has(e.calendarId)),
-    gridStart,
-    gridEnd,
-  );
+  const internalEvents = events.filter(e => !e.isExternal && visibleCalendarIds.has(e.calendarId));
+  const externalEventsFiltered = events.filter(e => e.isExternal);
+
+  const expandedEvents = [
+    ...expandEventsForRange(internalEvents, gridStart, gridEnd),
+    ...expandEventsForRange(externalEventsFiltered, gridStart, gridEnd),
+  ];
 
   const weekDayLabels = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
 
@@ -85,16 +87,39 @@ export function MonthView({ currentDate, events, calendars, onSlotClick, onEvent
               {/* Events */}
               <div className="space-y-0.5">
                 {visibleEvents.map(event => {
-                  const calendar = calendars.find(c => c.id === event.calendarId);
+                  const calendar = !event.isExternal
+                    ? calendars.find(c => c.id === event.calendarId)
+                    : null;
+                  const color = event.isExternal
+                    ? (event.ownerColor ?? '#94a3b8')
+                    : (calendar?.color ?? '#a881f3');
+
+                  if (event.isExternal) {
+                    return (
+                      <div
+                        key={event.id}
+                        title={`${event.title}\n${event.startTime}–${event.endTime}`}
+                        className="px-2 py-0.5 rounded-lg text-[11px] truncate cursor-default italic opacity-70"
+                        style={{
+                          background: `repeating-linear-gradient(45deg, ${color}18, ${color}18 3px, transparent 3px, transparent 6px)`,
+                          color: '#6b7280',
+                          borderLeft: `3px solid ${color}80`,
+                        }}
+                      >
+                        {event.title}
+                      </div>
+                    );
+                  }
+
                   return (
                     <div
                       key={event.id}
                       onClick={e => { e.stopPropagation(); onEventClick(event); }}
                       className="px-2 py-0.5 rounded-lg text-[11px] font-medium truncate cursor-pointer hover:opacity-80 transition-opacity"
                       style={{
-                        backgroundColor: `${calendar?.color ?? '#a881f3'}25`,
+                        backgroundColor: `${color}25`,
                         color: '#18181B',
-                        borderLeft: `3px solid ${calendar?.color ?? '#a881f3'}`,
+                        borderLeft: `3px solid ${color}`,
                       }}
                     >
                       {event.startTime} {event.title}

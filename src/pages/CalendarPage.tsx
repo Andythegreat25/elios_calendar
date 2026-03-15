@@ -17,6 +17,7 @@ import { useCalendars } from '@/hooks/useCalendars';
 import { useEvents } from '@/hooks/useEvents';
 import { useAuth } from '@/hooks/useAuth';
 import { useNotifications } from '@/hooks/useNotifications';
+import { useOutlookEvents } from '@/hooks/useOutlookEvents';
 import { MEETING_ROOM_ID } from '@/services/calendars.service';
 
 import type { CalendarEvent, SelectedSlot, ViewType } from '@/types';
@@ -39,9 +40,27 @@ export function CalendarPage({ user }: CalendarPageProps) {
   const { logoutUser } = useAuth();
 
   // ─── Dati server ───────────────────────────────────────────────────────────
-  const { currentProfile, saveProfile, error: profileError, clearError: clearProfileError } = useProfiles(user);
+  const { profiles, currentProfile, saveProfile, error: profileError, clearError: clearProfileError } = useProfiles(user);
   const { calendars, toggleCalendarVisibility, changeCalendarColor, error: calError, clearError: clearCalError } = useCalendars(user, currentProfile);
   const { events, isSaving, addEvent, editEvent: updateEvent, removeEvent, error: eventError, clearError } = useEvents(user);
+
+  // ─── Feed ICS Outlook (read-only) ──────────────────────────────────────────
+  const externalRaw = useOutlookEvents(profiles);
+  // Converti ExternalEvent → CalendarEvent con flag isExternal
+  const externalEvents: CalendarEvent[] = externalRaw.map((e) => ({
+    id: `ext_${e.ownerUid}_${e.uid}`,
+    title: e.title,
+    date: e.date,
+    startTime: e.startTime,
+    endTime: e.endTime,
+    calendarId: `external_${e.ownerUid}`,
+    ownerId: e.ownerUid,
+    createdAt: '',
+    isExternal: true,
+    ownerColor: profiles.find((p) => p.uid === e.ownerUid)?.color ?? '#94a3b8',
+  }));
+  // Array unificato: interni + Outlook overlay
+  const allEvents: CalendarEvent[] = [...events, ...externalEvents];
 
   // ─── Notifiche browser ──────────────────────────────────────────────────────
   useNotifications(events);
@@ -195,7 +214,7 @@ export function CalendarPage({ user }: CalendarPageProps) {
         {/* Sidebar */}
         <Sidebar
           calendars={calendars}
-          events={events}
+          events={allEvents}
           profile={currentProfile}
           onToggleCalendar={toggleCalendarVisibility}
           onColorChange={changeCalendarColor}
@@ -262,7 +281,7 @@ export function CalendarPage({ user }: CalendarPageProps) {
             {view === 'month' ? (
               <MonthView
                 currentDate={currentDate}
-                events={events}
+                events={allEvents}
                 calendars={calendars}
                 onSlotClick={handleSlotClick}
                 onEventClick={handleEventClick}
@@ -271,7 +290,7 @@ export function CalendarPage({ user }: CalendarPageProps) {
               <CalendarGrid
                 currentDate={currentDate}
                 view={view}
-                events={events}
+                events={allEvents}
                 calendars={calendars}
                 onSlotClick={handleSlotClick}
                 onEventClick={handleEventClick}

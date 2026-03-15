@@ -9,4 +9,6 @@ export interface Profile {
   color: string;
   /** URL dell'immagine profilo (opzionale, da Google o inserita manualmente) */
   photoURL?: string;
+  /** URL del feed ICS Outlook/Google Calendar (opzionale, per overlay read-only) */
+  icsUrl?: string;
 }

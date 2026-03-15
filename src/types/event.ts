@@ -26,6 +26,16 @@ export interface CalendarEvent {
   createdAt: string;
   /** Tipo di ricorrenza dell'evento */
   recurrence?: RecurrenceType;
+  /**
+   * true per eventi letti da feed ICS esterni (Outlook/Google).
+   * Read-only: non vengono salvati su Firestore.
+   */
+  isExternal?: boolean;
+  /**
+   * Colore hex per eventi esterni, quando non esiste un Calendar
+   * corrispondente in Firestore. Usato da CalendarGrid e MonthView.
+   */
+  ownerColor?: string;
 }
 
 /**

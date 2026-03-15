@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Camera, Trash2 } from 'lucide-react';
+import { X, Camera, Trash2, Link } from 'lucide-react';
 import type { Profile } from '@/types';
 import { Spinner } from '@/components/ui/Spinner';
 
@@ -42,6 +42,7 @@ export function SettingsModal({ isOpen, onClose, profile, onSave }: SettingsModa
   const [displayName, setDisplayName] = useState('');
   const [color, setColor] = useState('#a881f3');
   const [photoURL, setPhotoURL] = useState('');
+  const [icsUrl, setIcsUrl] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [isProcessingImage, setIsProcessingImage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -51,6 +52,7 @@ export function SettingsModal({ isOpen, onClose, profile, onSave }: SettingsModa
       setDisplayName(profile.displayName ?? '');
       setColor(profile.color ?? '#a881f3');
       setPhotoURL(profile.photoURL ?? '');
+      setIcsUrl(profile.icsUrl ?? '');
     }
   }, [isOpen, profile]);
 
@@ -81,7 +83,12 @@ export function SettingsModal({ isOpen, onClose, profile, onSave }: SettingsModa
     e.preventDefault();
     setIsSaving(true);
     try {
-      await onSave({ displayName: displayName.trim(), color, photoURL: photoURL || undefined });
+      await onSave({
+        displayName: displayName.trim(),
+        color,
+        photoURL: photoURL || undefined,
+        icsUrl: icsUrl.trim() || undefined,
+      });
       onClose();
     } catch {
       // L'errore viene già gestito nel hook useProfiles tramite Toast
@@ -204,6 +211,27 @@ export function SettingsModal({ isOpen, onClose, profile, onSave }: SettingsModa
               />
               <span className="text-sm text-zinc-500 font-mono uppercase">{color}</span>
             </div>
+          </div>
+
+          {/* ICS Feed Outlook */}
+          <div>
+            <label className="block text-sm font-medium text-zinc-700 mb-1">
+              Calendario Outlook (ICS Feed)
+            </label>
+            <div className="relative">
+              <Link className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400 pointer-events-none" />
+              <input
+                type="url"
+                placeholder="https://outlook.office.com/owa/calendar/..."
+                value={icsUrl}
+                onChange={(e) => setIcsUrl(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-900 transition-all text-sm font-mono"
+              />
+            </div>
+            <p className="text-xs text-zinc-400 mt-1">
+              In Outlook: File → Impostazioni account → Calendari Internet → copia l'URL ICS.
+              I tuoi eventi saranno visibili in sola lettura ai colleghi.
+            </p>
           </div>
 
           <button
