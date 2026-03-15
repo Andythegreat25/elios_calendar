@@ -101,32 +101,37 @@ export function Sidebar({
       {/* Profilo + azioni */}
       <div className="p-8 pb-6">
         <div className="flex items-center justify-between mb-10">
-          <div className="flex items-center gap-3">
-            {photoURL ? (
-              <img
-                src={photoURL}
-                alt={displayName}
-                className="w-10 h-10 rounded-full border border-white/10 object-cover"
-                referrerPolicy="no-referrer"
-              />
-            ) : (
-              <div className="w-10 h-10 rounded-full bg-white/10 border border-white/10 flex items-center justify-center text-white font-medium">
-                {displayName.charAt(0).toUpperCase()}
+          {/* Cliccando su avatar/nome/email apre le impostazioni */}
+          <button
+            type="button"
+            onClick={onOpenSettings}
+            className="flex items-center gap-3 flex-1 min-w-0 rounded-xl p-1.5 -m-1.5 hover:bg-white/5 transition-colors text-left group"
+            title="Impostazioni profilo"
+          >
+            <div className="relative flex-shrink-0">
+              {photoURL ? (
+                <img
+                  src={photoURL}
+                  alt={displayName}
+                  className="w-10 h-10 rounded-full border border-white/10 object-cover"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <div className="w-10 h-10 rounded-full bg-white/10 border border-white/10 flex items-center justify-center text-white font-medium">
+                  {displayName.charAt(0).toUpperCase()}
+                </div>
+              )}
+              {/* Overlay "modifica" sull'avatar al hover */}
+              <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                <Settings className="w-4 h-4 text-white" />
               </div>
-            )}
+            </div>
             <div className="overflow-hidden">
               <div className="text-sm font-medium text-white truncate">{displayName}</div>
               <div className="text-xs text-zinc-400 truncate">{user.email}</div>
             </div>
-          </div>
-          <div className="flex items-center gap-1">
-            <button
-              onClick={onOpenSettings}
-              className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors"
-              title="Impostazioni"
-            >
-              <Settings className="w-4 h-4 text-zinc-400" />
-            </button>
+          </button>
+          <div className="flex items-center gap-1 flex-shrink-0 ml-2">
             <button
               onClick={onLogout}
               className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors"

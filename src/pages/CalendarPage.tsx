@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import type { User } from 'firebase/auth';
-import { format, addWeeks, subWeeks, addDays, subDays, addMonths, subMonths } from 'date-fns';
+import { format, addWeeks, subWeeks, addDays, subDays, addMonths, subMonths, isSameDay } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/utils/cn';
@@ -17,6 +17,7 @@ import { useCalendars } from '@/hooks/useCalendars';
 import { useEvents } from '@/hooks/useEvents';
 import { useAuth } from '@/hooks/useAuth';
 import { useNotifications } from '@/hooks/useNotifications';
+import { MEETING_ROOM_ID } from '@/services/calendars.service';
 
 import type { CalendarEvent, SelectedSlot, ViewType } from '@/types';
 
@@ -53,9 +54,13 @@ export function CalendarPage({ user }: CalendarPageProps) {
   const [selectedSlot, setSelectedSlot] = useState<SelectedSlot | null>(null);
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
 
+  // Overlap detection per la sala riunioni
+  const [overlapError, setOverlapError] = useState<string | null>(null);
+
   // Aggrega errori da tutti gli hook per mostrarli via Toast
-  const toastMessage = profileError ?? calError ?? eventError ?? null;
+  const toastMessage = overlapError ?? profileError ?? calError ?? eventError ?? null;
   const clearToast = useCallback(() => {
+    setOverlapError(null);
     clearProfileError();
     clearCalError();
     clearError();
@@ -106,20 +111,64 @@ export function CalendarPage({ user }: CalendarPageProps) {
   }, []);
 
   // ─── CRUD eventi ───────────────────────────────────────────────────────────
+
+  /**
+   * Controlla se un evento in fase di creazione/modifica si sovrappone
+   * a un evento già esistente nella stessa sala.
+   * Algoritmo: due fasce si sovrappongono se start1 < end2 && end1 > start2.
+   * Confronto su stringhe HH:MM (24h) — funziona correttamente per ordinamento lessicografico.
+   * excludeId: quando si modifica un evento esistente, lo esclude dalla verifica (non confligge con se stesso).
+   */
+  const checkRoomOverlap = useCallback(
+    (calendarId: string, date: Date, startTime: string, endTime: string, excludeId?: string): CalendarEvent | undefined => {
+      if (calendarId !== MEETING_ROOM_ID) return undefined;
+      return events.find(
+        (e) =>
+          e.calendarId === MEETING_ROOM_ID &&
+          e.id !== excludeId &&
+          isSameDay(e.date, date) &&
+          startTime < e.endTime &&
+          endTime > e.startTime,
+      );
+    },
+    [events],
+  );
+
   const handleSaveEvent = useCallback(
     async (eventData: Omit<CalendarEvent, 'id' | 'ownerId' | 'createdAt'>) => {
+      const conflict = checkRoomOverlap(eventData.calendarId, eventData.date, eventData.startTime, eventData.endTime);
+      if (conflict) {
+        setOverlapError(`Sala già occupata: "${conflict.title}" (${conflict.startTime}–${conflict.endTime})`);
+        return;
+      }
       await addEvent(eventData);
       handleCloseModal();
     },
-    [addEvent, handleCloseModal],
+    [addEvent, handleCloseModal, checkRoomOverlap],
   );
 
   const handleUpdateEvent = useCallback(
     async (id: string, eventData: Partial<Omit<CalendarEvent, 'id' | 'ownerId' | 'createdAt'>>) => {
+      // Overlap check solo se si sta spostando/ridimensionando su una sala
+      if (eventData.calendarId !== undefined || eventData.date !== undefined || eventData.startTime !== undefined || eventData.endTime !== undefined) {
+        // Recupera i valori attuali dell'evento in caso di aggiornamento parziale
+        const existing = events.find((e) => e.id === id);
+        if (existing) {
+          const targetCalId  = eventData.calendarId ?? existing.calendarId;
+          const targetDate   = eventData.date       ?? existing.date;
+          const targetStart  = eventData.startTime  ?? existing.startTime;
+          const targetEnd    = eventData.endTime    ?? existing.endTime;
+          const conflict = checkRoomOverlap(targetCalId, targetDate, targetStart, targetEnd, id);
+          if (conflict) {
+            setOverlapError(`Sala già occupata: "${conflict.title}" (${conflict.startTime}–${conflict.endTime})`);
+            return;
+          }
+        }
+      }
       await updateEvent(id, eventData);
       handleCloseModal();
     },
-    [updateEvent, handleCloseModal],
+    [updateEvent, handleCloseModal, checkRoomOverlap, events],
   );
 
   const handleDeleteEvent = useCallback(

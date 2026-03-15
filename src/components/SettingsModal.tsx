@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, Camera, Trash2 } from 'lucide-react';
 import type { Profile } from '@/types';
 import { Spinner } from '@/components/ui/Spinner';
 
@@ -10,11 +10,41 @@ interface SettingsModalProps {
   onSave: (updates: Partial<Omit<Profile, 'uid'>>) => Promise<void>;
 }
 
+/**
+ * Ridimensiona un'immagine a max 200×200 e la converte in JPEG base64.
+ * Mantiene le proporzioni originali.
+ */
+function resizeImageToBase64(file: File, maxSize = 200, quality = 0.82): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const img = new Image();
+      img.onload = () => {
+        const ratio = Math.min(maxSize / img.width, maxSize / img.height, 1);
+        const w = Math.round(img.width * ratio);
+        const h = Math.round(img.height * ratio);
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d')!;
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = reject;
+      img.src = ev.target?.result as string;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 export function SettingsModal({ isOpen, onClose, profile, onSave }: SettingsModalProps) {
   const [displayName, setDisplayName] = useState('');
   const [color, setColor] = useState('#a881f3');
   const [photoURL, setPhotoURL] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [isProcessingImage, setIsProcessingImage] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (isOpen && profile) {
@@ -26,11 +56,32 @@ export function SettingsModal({ isOpen, onClose, profile, onSave }: SettingsModa
 
   if (!isOpen) return null;
 
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsProcessingImage(true);
+    try {
+      const base64 = await resizeImageToBase64(file);
+      setPhotoURL(base64);
+    } catch {
+      // ignore — utente può provare di nuovo
+    } finally {
+      setIsProcessingImage(false);
+      // reset input so the same file can be re-selected
+      e.target.value = '';
+    }
+  };
+
+  const handleRemovePhoto = () => {
+    setPhotoURL('');
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
     try {
-      await onSave({ displayName: displayName.trim(), color, photoURL: photoURL.trim() || undefined });
+      await onSave({ displayName: displayName.trim(), color, photoURL: photoURL || undefined });
       onClose();
     } catch {
       // L'errore viene già gestito nel hook useProfiles tramite Toast
@@ -38,6 +89,8 @@ export function SettingsModal({ isOpen, onClose, profile, onSave }: SettingsModa
       setIsSaving(false);
     }
   };
+
+  const initials = displayName?.charAt(0)?.toUpperCase() || 'U';
 
   return (
     <div
@@ -48,6 +101,7 @@ export function SettingsModal({ isOpen, onClose, profile, onSave }: SettingsModa
         className="bg-white rounded-[2rem] w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-100">
           <h2 className="text-lg font-semibold text-zinc-900">Impostazioni Profilo</h2>
           <button
@@ -59,35 +113,67 @@ export function SettingsModal({ isOpen, onClose, profile, onSave }: SettingsModa
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          {/* Avatar preview */}
-          <div className="flex items-center gap-4">
-            {photoURL ? (
-              <img
-                src={photoURL}
-                alt="Preview"
-                className="w-16 h-16 rounded-full object-cover border border-zinc-200"
-                referrerPolicy="no-referrer"
-              />
-            ) : (
-              <div
-                className="w-16 h-16 rounded-full flex items-center justify-center text-white font-medium text-xl"
-                style={{ backgroundColor: color }}
+
+          {/* Avatar upload */}
+          <div className="flex flex-col items-center gap-3">
+            {/* Avatar cliccabile */}
+            <div className="relative group">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="relative w-24 h-24 rounded-full overflow-hidden focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-zinc-900"
+                title="Cambia foto profilo"
               >
-                {displayName?.charAt(0)?.toUpperCase() || 'U'}
-              </div>
-            )}
-            <div className="flex-1">
-              <label className="block text-sm font-medium text-zinc-700 mb-1">
-                URL Foto Profilo (opzionale)
-              </label>
-              <input
-                type="url"
-                value={photoURL}
-                onChange={(e) => setPhotoURL(e.target.value)}
-                placeholder="https://..."
-                className="w-full px-4 py-2 bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-900 transition-all text-sm"
-              />
+                {isProcessingImage ? (
+                  <div className="w-full h-full flex items-center justify-center bg-zinc-100">
+                    <Spinner size="md" />
+                  </div>
+                ) : photoURL ? (
+                  <img
+                    src={photoURL}
+                    alt="Avatar"
+                    className="w-full h-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div
+                    className="w-full h-full flex items-center justify-center text-white font-semibold text-3xl"
+                    style={{ backgroundColor: color }}
+                  >
+                    {initials}
+                  </div>
+                )}
+                {/* Overlay hover */}
+                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                  <Camera className="w-7 h-7 text-white" />
+                </div>
+              </button>
+
+              {/* Badge "rimuovi" quando c'è una foto */}
+              {photoURL && !isProcessingImage && (
+                <button
+                  type="button"
+                  onClick={handleRemovePhoto}
+                  className="absolute -bottom-1 -right-1 w-7 h-7 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center shadow-md transition-colors"
+                  title="Rimuovi foto"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-white" />
+                </button>
+              )}
             </div>
+
+            <p className="text-xs text-zinc-400">
+              Clicca per caricare una foto · JPG, PNG, WebP
+            </p>
+
+            {/* Input file nascosto */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              onChange={handleFileChange}
+              className="hidden"
+            />
           </div>
 
           {/* Nome */}
@@ -122,7 +208,7 @@ export function SettingsModal({ isOpen, onClose, profile, onSave }: SettingsModa
 
           <button
             type="submit"
-            disabled={isSaving}
+            disabled={isSaving || isProcessingImage}
             className="w-full bg-zinc-900 hover:bg-zinc-800 text-white px-4 py-3 rounded-xl font-medium transition-all shadow-sm disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {isSaving ? (

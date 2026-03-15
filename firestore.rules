@@ -90,7 +90,7 @@ service cloud.firestore {
 
     function isValidEvent(data) {
       return data.keys().hasAll(['title', 'date', 'startTime', 'endTime', 'calendarId', 'ownerId', 'createdAt']) &&
-             data.keys().hasOnly(['title', 'date', 'startTime', 'endTime', 'calendarId', 'description', 'ownerId', 'createdAt']) &&
+             data.keys().hasOnly(['title', 'date', 'startTime', 'endTime', 'calendarId', 'description', 'ownerId', 'createdAt', 'recurrence']) &&
              data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
              data.date is string && data.date.size() == 10 &&
              data.startTime is string && data.startTime.size() == 5 &&
@@ -98,7 +98,8 @@ service cloud.firestore {
              data.calendarId is string && data.calendarId.size() > 0 && data.calendarId.size() < 100 &&
              (!('description' in data) || (data.description is string && data.description.size() <= 1000)) &&
              data.ownerId is string && data.ownerId.size() > 0 && data.ownerId.size() < 100 &&
-             data.createdAt is string && isValidDateString(data.createdAt);
+             data.createdAt is string && isValidDateString(data.createdAt) &&
+             (!('recurrence' in data) || data.recurrence in ['none', 'daily', 'weekly', 'monthly']);
     }
 
     // ===============================================================
