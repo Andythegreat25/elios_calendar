@@ -92,6 +92,9 @@ export function Sidebar({
 
   const nextEventCalendar = nextEvent ? calendars.find((c) => c.id === nextEvent.calendarId) : null;
 
+  const [roomsOpen, setRoomsOpen] = useState(true);
+  const [usersOpen, setUsersOpen] = useState(true);
+
   const displayName = profile?.displayName ?? user.displayName ?? 'Utente';
   const photoURL = profile?.photoURL ?? user.photoURL ?? null;
 
@@ -234,84 +237,113 @@ export function Sidebar({
         {/* Sale riunioni */}
         {rooms.length > 0 && (
           <div>
-            <div className="flex items-center justify-between text-sm font-medium text-white mb-4">
-              Sale Riunioni
-            </div>
-            <div className="space-y-3">
-              {rooms.map((room) => {
-                const count = events.filter(
-                  (e) => e.calendarId === room.id && isSameDay(e.date, currentDate),
-                ).length;
-                return (
-                  <div key={room.id} className="flex items-center justify-between group">
-                    <label className="flex items-center gap-3 cursor-pointer flex-1">
-                      <div className="relative flex items-center justify-center">
-                        <input
-                          type="checkbox"
-                          checked={room.visible ?? true}
-                          onChange={() => onToggleCalendar(room.id)}
-                          className="appearance-none w-4 h-4 border border-zinc-600 rounded-sm checked:border-transparent transition-colors"
-                          style={{ backgroundColor: room.visible ? room.color : 'transparent' }}
-                        />
-                        {room.visible && (
-                          <svg className="w-2.5 h-2.5 text-white absolute pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                          </svg>
-                        )}
-                      </div>
-                      <span className="text-xs text-zinc-300 font-medium">{room.name}</span>
-                    </label>
-                    {onColorChange && <ColorPicker color={room.color} onChange={(c) => onColorChange(room.id, c)} />}
-                    {count > 0 && (
-                      <div className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center text-[10px] text-zinc-400 ml-2">
-                        {count}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+            <button
+              type="button"
+              onClick={() => setRoomsOpen((v) => !v)}
+              className="flex items-center justify-between w-full text-sm font-medium text-white mb-3 group"
+            >
+              <span>Sale Riunioni</span>
+              <ChevronLeft
+                className={cn(
+                  'w-3.5 h-3.5 text-zinc-500 group-hover:text-zinc-300 transition-all duration-200',
+                  roomsOpen ? '-rotate-90' : 'rotate-0',
+                )}
+              />
+            </button>
+            {roomsOpen && (
+              <div className="space-y-3">
+                {rooms.map((room) => {
+                  const count = events.filter(
+                    (e) => e.calendarId === room.id && isSameDay(e.date, currentDate),
+                  ).length;
+                  return (
+                    <div key={room.id} className="flex items-center justify-between group">
+                      <label className="flex items-center gap-3 cursor-pointer flex-1">
+                        <div className="relative flex items-center justify-center">
+                          <input
+                            type="checkbox"
+                            checked={room.visible ?? true}
+                            onChange={() => onToggleCalendar(room.id)}
+                            className="appearance-none w-4 h-4 border border-zinc-600 rounded-sm checked:border-transparent transition-colors"
+                            style={{ backgroundColor: room.visible ? room.color : 'transparent' }}
+                          />
+                          {room.visible && (
+                            <svg className="w-2.5 h-2.5 text-white absolute pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                        </div>
+                        <span className="text-xs text-zinc-300 font-medium">{room.name}</span>
+                      </label>
+                      {onColorChange && <ColorPicker color={room.color} onChange={(c) => onColorChange(room.id, c)} />}
+                      {count > 0 && (
+                        <div className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center text-[10px] text-zinc-400 ml-2">
+                          {count}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 
         {/* Calendari utenti */}
         {users.length > 0 && (
           <div>
-            <div className="flex items-center justify-between text-sm font-medium text-white mb-4">
-              Calendari
-            </div>
-            <div className="space-y-3">
-              {users.map((cal) => {
-                const count = events.filter(
-                  (e) => e.calendarId === cal.id && isSameDay(e.date, currentDate),
-                ).length;
-                const maxCount = Math.max(
-                  ...users.map((u) =>
-                    events.filter((e) => e.calendarId === u.id && isSameDay(e.date, currentDate)).length,
-                  ),
-                  1,
-                );
-                const pct = Math.min(100, Math.max(5, (count / maxCount) * 100));
+            <button
+              type="button"
+              onClick={() => setUsersOpen((v) => !v)}
+              className="flex items-center justify-between w-full text-sm font-medium text-white mb-3 group"
+            >
+              <span>Calendari</span>
+              <div className="flex items-center gap-2">
+                {!usersOpen && (
+                  <span className="text-[10px] text-zinc-500 font-normal">{users.length}</span>
+                )}
+                <ChevronLeft
+                  className={cn(
+                    'w-3.5 h-3.5 text-zinc-500 group-hover:text-zinc-300 transition-all duration-200',
+                    usersOpen ? '-rotate-90' : 'rotate-0',
+                  )}
+                />
+              </div>
+            </button>
+            {usersOpen && (
+              <div className="space-y-3">
+                {users.map((cal) => {
+                  const count = events.filter(
+                    (e) => e.calendarId === cal.id && isSameDay(e.date, currentDate),
+                  ).length;
+                  const maxCount = Math.max(
+                    ...users.map((u) =>
+                      events.filter((e) => e.calendarId === u.id && isSameDay(e.date, currentDate)).length,
+                    ),
+                    1,
+                  );
+                  const pct = Math.min(100, Math.max(5, (count / maxCount) * 100));
 
-                return (
-                  <div key={cal.id} className="flex items-center justify-between group">
-                    <label className="flex items-center gap-3 cursor-pointer flex-1">
-                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: cal.color }} />
-                      <span className="text-xs text-zinc-300 font-medium">{cal.name}</span>
-                    </label>
-                    {onColorChange && <ColorPicker color={cal.color} onChange={(c) => onColorChange(cal.id, c)} />}
-                    {count > 0 && (
-                      <div className="w-16 h-1 bg-white/10 rounded-full overflow-hidden ml-2">
-                        <div
-                          className="h-full rounded-full transition-all duration-500"
-                          style={{ width: `${pct}%`, backgroundColor: cal.color }}
-                        />
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+                  return (
+                    <div key={cal.id} className="flex items-center justify-between group">
+                      <label className="flex items-center gap-3 cursor-pointer flex-1">
+                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: cal.color }} />
+                        <span className="text-xs text-zinc-300 font-medium">{cal.name}</span>
+                      </label>
+                      {onColorChange && <ColorPicker color={cal.color} onChange={(c) => onColorChange(cal.id, c)} />}
+                      {count > 0 && (
+                        <div className="w-16 h-1 bg-white/10 rounded-full overflow-hidden ml-2">
+                          <div
+                            className="h-full rounded-full transition-all duration-500"
+                            style={{ width: `${pct}%`, backgroundColor: cal.color }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
       </div>
