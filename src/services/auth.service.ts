@@ -10,8 +10,14 @@ export type { User };
 export async function loginWithEmail(
   email: string,
   password: string,
-  _remember: boolean,
+  remember: boolean,
 ): Promise<User> {
+  // Imposta la preferenza PRIMA del signIn, così storageAdapter la legge correttamente
+  if (remember) {
+    localStorage.setItem('elios_remember', '1');
+  } else {
+    localStorage.removeItem('elios_remember');
+  }
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) throw error;
   return data.user;

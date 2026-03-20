@@ -330,7 +330,20 @@ export function Sidebar({
                   return (
                     <div key={cal.id} className="flex items-center justify-between group">
                       <label className="flex items-center gap-3 cursor-pointer flex-1">
-                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: cal.color }} />
+                        <div className="relative flex items-center justify-center">
+                          <input
+                            type="checkbox"
+                            checked={cal.visible ?? true}
+                            onChange={() => onToggleCalendar(cal.id)}
+                            className="appearance-none w-4 h-4 border border-zinc-600 rounded-sm checked:border-transparent transition-colors"
+                            style={{ backgroundColor: cal.visible ? cal.color : 'transparent' }}
+                          />
+                          {cal.visible && (
+                            <svg className="w-2.5 h-2.5 text-white absolute pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                        </div>
                         <span className="text-xs text-zinc-300 font-medium">{cal.name}</span>
                       </label>
                       {onColorChange && <ColorPicker color={cal.color} onChange={(c) => onColorChange(cal.id, c)} />}

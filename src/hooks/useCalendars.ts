@@ -110,13 +110,20 @@ export function useCalendars(
     return unsubscribe;
   }, [user, rebuildCalendars]);
 
-  // Sync colore calendario personale con il profilo
+  // Sync nome e colore del calendario personale con il profilo
   useEffect(() => {
     if (!user || !currentProfile) return;
     const calId = personalCalendarId(user.id);
     const personal = rawCalendarsRef.current.find((c) => c.id === calId);
-    if (personal && personal.color !== currentProfile.color) {
-      updateCalendar(calId, { color: currentProfile.color }).catch(console.error);
+    if (!personal) return;
+    const needsUpdate =
+      personal.color !== currentProfile.color ||
+      personal.name  !== currentProfile.displayName;
+    if (needsUpdate) {
+      updateCalendar(calId, {
+        color: currentProfile.color,
+        name:  currentProfile.displayName,
+      }).catch(console.error);
     }
   }, [currentProfile, user]);
 
