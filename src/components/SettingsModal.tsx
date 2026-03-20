@@ -52,6 +52,7 @@ export function SettingsModal({ isOpen, onClose, profile, onSave }: SettingsModa
   const [icsUrl, setIcsUrl] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [isProcessingImage, setIsProcessingImage] = useState(false);
+  const [modalError, setModalError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -60,6 +61,7 @@ export function SettingsModal({ isOpen, onClose, profile, onSave }: SettingsModa
       setColor(profile.color ?? '#a881f3');
       setPhotoURL(profile.photoURL ?? '');
       setIcsUrl(profile.icsUrl ?? '');
+      setModalError(null);
     }
   }, [isOpen, profile]);
 
@@ -69,18 +71,15 @@ export function SettingsModal({ isOpen, onClose, profile, onSave }: SettingsModa
     const file = e.target.files?.[0];
     if (!file || !profile) return;
     setIsProcessingImage(true);
+    setModalError(null);
     try {
-      // Ridimensiona localmente prima di caricare (risparmia banda)
       const blob = await resizeImageToBlob(file);
-      // Carica su Firebase Storage — l'URL (https://...) viene salvato in Firestore
-      // invece della stringa base64, riducendo di ~200× i dati per ogni lettura profilo
       const url = await uploadProfilePhoto(profile.uid, blob);
       setPhotoURL(url);
-    } catch {
-      // ignore — utente può provare di nuovo
+    } catch (err) {
+      setModalError(err instanceof Error ? err.message : 'Errore caricamento foto');
     } finally {
       setIsProcessingImage(false);
-      // reset input so the same file can be re-selected
       e.target.value = '';
     }
   };
@@ -97,6 +96,7 @@ export function SettingsModal({ isOpen, onClose, profile, onSave }: SettingsModa
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
+    setModalError(null);
     try {
       await onSave({
         displayName: displayName.trim(),
@@ -105,8 +105,8 @@ export function SettingsModal({ isOpen, onClose, profile, onSave }: SettingsModa
         icsUrl: icsUrl.trim() || undefined,
       });
       onClose();
-    } catch {
-      // L'errore viene già gestito nel hook useProfiles tramite Toast
+    } catch (err) {
+      setModalError(err instanceof Error ? err.message : 'Errore salvataggio profilo');
     } finally {
       setIsSaving(false);
     }
@@ -248,6 +248,12 @@ export function SettingsModal({ isOpen, onClose, profile, onSave }: SettingsModa
               I tuoi eventi saranno visibili in sola lettura ai colleghi.
             </p>
           </div>
+
+          {modalError && (
+            <p className="text-sm text-red-500 bg-red-50 border border-red-100 rounded-xl px-4 py-2.5">
+              {modalError}
+            </p>
+          )}
 
           <button
             type="submit"

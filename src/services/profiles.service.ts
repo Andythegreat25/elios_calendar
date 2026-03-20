@@ -54,11 +54,13 @@ export async function updateProfile(
   uid: string,
   updates: Partial<Omit<Profile, 'uid'>>,
 ): Promise<void> {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('profiles')
     .update(toDb(updates))
-    .eq('uid', uid);
+    .eq('uid', uid)
+    .select('uid');
   if (error) throw new Error(error.message);
+  if (!data || data.length === 0) throw new Error('Profilo non trovato o permessi insufficienti');
 }
 
 // ─── Real-time subscription ───────────────────────────────────────────────────

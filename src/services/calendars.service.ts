@@ -64,11 +64,13 @@ export async function updateCalendar(
   id: string,
   updates: Partial<Omit<Calendar, 'id' | 'ownerId' | 'type' | 'visible'>>,
 ): Promise<void> {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('calendars')
     .update(updates)
-    .eq('id', id);
+    .eq('id', id)
+    .select('id');
   if (error) throw new Error(error.message);
+  if (!data || data.length === 0) throw new Error('Calendario non trovato o permessi insufficienti');
 }
 
 export async function deleteCalendar(id: string): Promise<void> {
