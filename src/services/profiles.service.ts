@@ -1,5 +1,6 @@
 import {
   collection,
+  deleteField,
   doc,
   getDoc,
   onSnapshot,
@@ -41,7 +42,11 @@ export async function updateProfile(
   updates: Partial<Omit<Profile, 'uid'>>,
 ): Promise<void> {
   const ref = doc(db, PROFILES_COLLECTION, uid);
-  await updateDoc(ref, updates);
+  // Firestore non accetta undefined: converte i campi undefined in deleteField()
+  const sanitized = Object.fromEntries(
+    Object.entries(updates).map(([k, v]) => [k, v === undefined ? deleteField() : v]),
+  );
+  await updateDoc(ref, sanitized);
 }
 
 /**
