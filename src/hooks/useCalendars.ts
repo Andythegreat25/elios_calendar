@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import type { User } from 'firebase/auth';
+import type { User } from '@supabase/supabase-js';
 import type { Calendar, Profile } from '@/types';
 import {
   subscribeToCalendars,
@@ -57,19 +57,19 @@ export function useCalendars(
     const initCalendars = async () => {
       setIsLoading(true);
       try {
-        await createCalendarWithId(personalCalendarId(user.uid), {
+        await createCalendarWithId(personalCalendarId(user.id), {
           name:    currentProfile.displayName,
           color:   currentProfile.color,
           type:    'user',
-          ownerId: user.uid,
+          ownerId: user.id,
         });
         await createCalendarWithId(MEETING_ROOM_ID, {
           name:    'Sala Riunioni',
           color:   '#2dd4bf',
           type:    'room',
-          ownerId: user.uid,
+          ownerId: user.id,
         });
-        await cleanupDuplicateCalendars(user.uid);
+        await cleanupDuplicateCalendars(user.id);
       } catch (err) {
         console.error('[useCalendars] initCalendars error:', err);
         setError(err instanceof Error ? err.message : 'Errore inizializzazione calendari');
@@ -113,7 +113,7 @@ export function useCalendars(
   // Sync colore calendario personale con il profilo
   useEffect(() => {
     if (!user || !currentProfile) return;
-    const calId = personalCalendarId(user.uid);
+    const calId = personalCalendarId(user.id);
     const personal = rawCalendarsRef.current.find((c) => c.id === calId);
     if (personal && personal.color !== currentProfile.color) {
       updateCalendar(calId, { color: currentProfile.color }).catch(console.error);

@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import type { User } from 'firebase/auth';
+import type { User } from '@supabase/supabase-js';
 import type { CalendarEvent } from '@/types';
 import {
   subscribeToEvents,
@@ -11,7 +11,6 @@ import {
   deleteRoomEvent,
 } from '@/services/events.service';
 import { MEETING_ROOM_ID } from '@/services/calendars.service';
-import { isSameDay } from 'date-fns';
 
 interface UseEventsReturn {
   events: CalendarEvent[];
@@ -69,17 +68,14 @@ export function useEvents(user: User | null): UseEventsReturn {
       try {
         const fullEvent: Omit<CalendarEvent, 'id'> = {
           ...eventData,
-          ownerId:   user.uid,
+          ownerId:   user.id,
           createdAt: new Date().toISOString(),
         };
 
-        // Per la sala riunioni usa la funzione atomica con lock Firestore
+        // Per la sala riunioni usa la RPC PostgreSQL con advisory lock
         // per prevenire double booking concorrenti tra più client.
         if (eventData.calendarId === MEETING_ROOM_ID) {
-          const existingForDay = events.filter(
-            (e) => e.calendarId === MEETING_ROOM_ID && isSameDay(e.date, eventData.date),
-          );
-          return await createRoomEvent(fullEvent, existingForDay);
+          return await createRoomEvent(fullEvent);
         }
 
         return await createEvent(fullEvent);
@@ -102,14 +98,11 @@ export function useEvents(user: User | null): UseEventsReturn {
       setIsSaving(true);
       setError(null);
       try {
-        // Per la sala riunioni usa la funzione atomica con lock Firestore
+        // Per la sala riunioni usa la RPC PostgreSQL con advisory lock
         const existing = events.find((e) => e.id === id);
         if (existing?.calendarId === MEETING_ROOM_ID || updates.calendarId === MEETING_ROOM_ID) {
           const targetDate = updates.date ?? existing?.date ?? new Date();
-          const existingForDay = events.filter(
-            (e) => e.calendarId === MEETING_ROOM_ID && isSameDay(e.date, targetDate) && e.id !== id,
-          );
-          await updateRoomEvent(id, updates, targetDate, existingForDay);
+          await updateRoomEvent(id, updates, targetDate);
           return;
         }
         await updateEvent(id, updates);
@@ -129,10 +122,9 @@ export function useEvents(user: User | null): UseEventsReturn {
       setIsSaving(true);
       setError(null);
       try {
-        // Per la sala riunioni rimuove anche lo slot dal lock doc
         const existing = events.find((e) => e.id === id);
         if (existing?.calendarId === MEETING_ROOM_ID) {
-          await deleteRoomEvent(id, existing.date);
+          await deleteRoomEvent(id);
           return;
         }
         await deleteEvent(id);

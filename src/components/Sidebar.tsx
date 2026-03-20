@@ -6,7 +6,7 @@ import {
 } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { useState, useEffect } from 'react';
-import type { User } from 'firebase/auth';
+import type { User } from '@supabase/supabase-js';
 import { cn } from '@/utils/cn';
 import { Logo } from './Logo';
 
@@ -95,8 +95,11 @@ export function Sidebar({
   const [roomsOpen, setRoomsOpen] = useState(true);
   const [usersOpen, setUsersOpen] = useState(true);
 
-  const displayName = profile?.displayName ?? user.displayName ?? 'Utente';
-  const photoURL = profile?.photoURL ?? user.photoURL ?? null;
+  const displayName = profile?.displayName
+    ?? (user.user_metadata?.display_name as string | undefined)
+    ?? user.email?.split('@')[0]
+    ?? 'Utente';
+  const photoURL = profile?.photoURL ?? null;
 
   return (
     <aside className="w-[320px] bg-[#1C1C1E] text-white flex flex-col h-full overflow-y-auto flex-shrink-0">

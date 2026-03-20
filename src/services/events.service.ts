@@ -1,287 +1,187 @@
-import {
-  collection,
-  doc,
-  onSnapshot,
-  setDoc,
-  updateDoc,
-  deleteDoc,
-  runTransaction,
-  type Unsubscribe,
-} from 'firebase/firestore';
+import { supabase } from '@/lib/supabase';
 import { format } from 'date-fns';
-import { db } from '@/firebase';
-import type { CalendarEvent, FirestoreEvent } from '@/types';
+import type { CalendarEvent } from '@/types';
 import { MEETING_ROOM_ID } from './calendars.service';
 
-const EVENTS_COLLECTION = 'events';
+// ─── Serializzazione snake_case ↔ camelCase ───────────────────────────────────
 
-// ─── Serializzazione / Deserializzazione ─────────────────────────────────────
+type DbEvent = {
+  id:          string;
+  title:       string;
+  date:        string;   // "YYYY-MM-DD"
+  start_time:  string;   // "HH:MM"
+  end_time:    string;   // "HH:MM"
+  calendar_id: string;
+  description: string | null;
+  owner_id:    string;
+  created_at:  string;
+  recurrence:  string;
+};
 
-/**
- * Converte un CalendarEvent (UI) in FirestoreEvent (raw) per il salvataggio.
- * La data viene convertita da Date a stringa "YYYY-MM-DD".
- */
-function toFirestoreEvent(event: Omit<CalendarEvent, 'id'>): FirestoreEvent {
+function fromDb(row: DbEvent): CalendarEvent {
+  const [year, month, day] = row.date.split('-').map(Number);
   return {
-    title:       event.title,
-    date:        format(event.date, 'yyyy-MM-dd'),
-    startTime:   event.startTime,
-    endTime:     event.endTime,
-    calendarId:  event.calendarId,
-    description: event.description,
-    ownerId:     event.ownerId,
-    createdAt:   event.createdAt,
-    recurrence:  event.recurrence ?? 'none',
-  };
-}
-
-/**
- * Converte un documento Firestore in CalendarEvent (UI).
- * La data viene convertita da stringa "YYYY-MM-dd" a oggetto Date.
- */
-function fromFirestoreEvent(id: string, data: FirestoreEvent): CalendarEvent {
-  // Parsing manuale di "YYYY-MM-DD" per evitare problemi di timezone
-  // (new Date("YYYY-MM-DD") interpreta come UTC, causando offset di -1 giorno)
-  const [year, month, day] = data.date.split('-').map(Number);
-  return {
-    id,
-    title:       data.title,
+    id:          row.id,
+    title:       row.title,
     date:        new Date(year, month - 1, day),
-    startTime:   data.startTime,
-    endTime:     data.endTime,
-    calendarId:  data.calendarId,
-    description: data.description,
-    ownerId:     data.ownerId,
-    createdAt:   data.createdAt,
-    recurrence:  data.recurrence ?? 'none',
+    startTime:   row.start_time,
+    endTime:     row.end_time,
+    calendarId:  row.calendar_id,
+    description: row.description ?? undefined,
+    ownerId:     row.owner_id,
+    createdAt:   row.created_at,
+    recurrence:  (row.recurrence ?? 'none') as CalendarEvent['recurrence'],
   };
 }
 
-// ─── CRUD ─────────────────────────────────────────────────────────────────────
+// ─── CRUD eventi normali ───────────────────────────────────────────────────────
 
-/**
- * Crea un nuovo evento su Firestore.
- * L'ID viene generato da Firestore (non da Math.random) per sicurezza.
- * Restituisce l'ID assegnato all'evento.
- */
 export async function createEvent(
   event: Omit<CalendarEvent, 'id'>,
 ): Promise<string> {
-  const ref = doc(collection(db, EVENTS_COLLECTION));
-  const id = ref.id;
-  await setDoc(ref, toFirestoreEvent(event));
-  return id;
+  const { data, error } = await supabase
+    .from('events')
+    .insert({
+      title:       event.title,
+      date:        format(event.date, 'yyyy-MM-dd'),
+      start_time:  event.startTime,
+      end_time:    event.endTime,
+      calendar_id: event.calendarId,
+      description: event.description ?? null,
+      owner_id:    event.ownerId,
+      recurrence:  event.recurrence ?? 'none',
+    })
+    .select('id')
+    .single();
+  if (error) throw new Error(error.message);
+  return data.id;
 }
 
-/**
- * Aggiorna un evento esistente.
- * Accetta un subset dei campi — non sovrascrive l'intero documento.
- */
 export async function updateEvent(
   id: string,
   updates: Partial<Omit<CalendarEvent, 'id' | 'ownerId' | 'createdAt'>>,
 ): Promise<void> {
-  const ref = doc(db, EVENTS_COLLECTION, id);
-  const firestoreUpdates: Partial<FirestoreEvent> = {};
+  const patch: Partial<DbEvent> = {};
+  if (updates.title       !== undefined) patch.title       = updates.title;
+  if (updates.description !== undefined) patch.description = updates.description ?? null;
+  if (updates.startTime   !== undefined) patch.start_time  = updates.startTime;
+  if (updates.endTime     !== undefined) patch.end_time    = updates.endTime;
+  if (updates.calendarId  !== undefined) patch.calendar_id = updates.calendarId;
+  if (updates.date        !== undefined) patch.date        = format(updates.date, 'yyyy-MM-dd');
+  if (updates.recurrence  !== undefined) patch.recurrence  = updates.recurrence;
 
-  if (updates.title       !== undefined) firestoreUpdates.title       = updates.title;
-  if (updates.description !== undefined) firestoreUpdates.description = updates.description;
-  if (updates.startTime   !== undefined) firestoreUpdates.startTime   = updates.startTime;
-  if (updates.endTime     !== undefined) firestoreUpdates.endTime     = updates.endTime;
-  if (updates.calendarId  !== undefined) firestoreUpdates.calendarId  = updates.calendarId;
-  if (updates.date        !== undefined) firestoreUpdates.date        = format(updates.date, 'yyyy-MM-dd');
-  if (updates.recurrence  !== undefined) firestoreUpdates.recurrence  = updates.recurrence;
-
-  await updateDoc(ref, firestoreUpdates);
+  const { error } = await supabase.from('events').update(patch).eq('id', id);
+  if (error) throw new Error(error.message);
 }
 
-/**
- * Elimina un evento da Firestore.
- */
 export async function deleteEvent(id: string): Promise<void> {
-  const ref = doc(db, EVENTS_COLLECTION, id);
-  await deleteDoc(ref);
+  const { error } = await supabase.from('events').delete().eq('id', id);
+  if (error) throw new Error(error.message);
 }
 
-// ─── Room lock helpers ────────────────────────────────────────────────────────
+// ─── CRUD atomico sala riunioni (via RPC PostgreSQL) ──────────────────────────
 
 /**
- * Struttura del documento di lock per la sala riunioni.
- * Chiave: eventId, valore: { start, end, title } della prenotazione.
- */
-type SlotEntry = { start: string; end: string; title: string };
-type SlotMap   = Record<string, SlotEntry>;
-
-const ROOM_LOCKS_COLLECTION = 'roomLocks';
-
-/** ID univoco del documento di lock per sala + giorno. */
-function roomLockId(date: Date): string {
-  return `${MEETING_ROOM_ID}_${format(date, 'yyyy-MM-dd')}`;
-}
-
-/** Restituisce il primo slot in conflitto con [start, end), escludendo excludeId. */
-function findConflict(
-  slots: SlotMap,
-  start: string,
-  end: string,
-  excludeId?: string,
-): SlotEntry | undefined {
-  return Object.entries(slots).find(
-    ([id, slot]) => id !== excludeId && start < slot.end && end > slot.start,
-  )?.[1];
-}
-
-/**
- * Crea uno SlotMap iniziale dal snapshot locale degli eventi noti.
- * Usato per "bootstrappare" il lock doc se ancora non esiste su Firestore.
- */
-function slotsFromEvents(knownEvents: CalendarEvent[]): SlotMap {
-  const slots: SlotMap = {};
-  for (const e of knownEvents) {
-    slots[e.id] = { start: e.startTime, end: e.endTime, title: e.title };
-  }
-  return slots;
-}
-
-// ─── CRUD atomico sala riunioni ───────────────────────────────────────────────
-
-/**
- * Crea un evento nella sala riunioni in modo atomico.
- *
- * Usa una transazione Firestore su un documento di lock per giorno
- * ({roomLocks/MEETING_ROOM_ID_YYYY-MM-DD}) così da impedire il double-booking
- * anche in caso di scritture concorrenti da più client.
- *
- * @param event                   - dati dell'evento da creare
- * @param existingRoomEventsForDay - snapshot locale degli eventi già prenotati nello stesso giorno
- *                                   (usato per inizializzare il lock doc se mancante)
+ * Crea un evento nella sala riunioni in modo atomico tramite RPC PostgreSQL.
+ * La funzione `create_room_event` usa pg_advisory_xact_lock per prevenire
+ * il double-booking anche in caso di scritture concorrenti.
  */
 export async function createRoomEvent(
   event: Omit<CalendarEvent, 'id'>,
-  existingRoomEventsForDay: CalendarEvent[],
 ): Promise<string> {
-  const newEventRef = doc(collection(db, EVENTS_COLLECTION));
-  const lockRef     = doc(db, ROOM_LOCKS_COLLECTION, roomLockId(event.date));
-
-  await runTransaction(db, async (tx) => {
-    const lockSnap = await tx.get(lockRef);
-    const slots: SlotMap = lockSnap.exists()
-      ? ((lockSnap.data().slots ?? {}) as SlotMap)
-      : slotsFromEvents(existingRoomEventsForDay);
-
-    const conflict = findConflict(slots, event.startTime, event.endTime);
-    if (conflict) {
-      throw new Error(
-        `Sala già occupata: "${conflict.title}" (${conflict.start}–${conflict.end})`,
-      );
-    }
-
-    const updatedSlots: SlotMap = {
-      ...slots,
-      [newEventRef.id]: { start: event.startTime, end: event.endTime, title: event.title },
-    };
-
-    tx.set(newEventRef, toFirestoreEvent(event));
-    tx.set(lockRef, { slots: updatedSlots, updatedAt: new Date().toISOString() });
+  const { data, error } = await supabase.rpc('create_room_event', {
+    p_title:       event.title,
+    p_date:        format(event.date, 'yyyy-MM-dd'),
+    p_start:       event.startTime,
+    p_end:         event.endTime,
+    p_calendar_id: event.calendarId,
+    p_description: event.description ?? null,
+    p_owner_id:    event.ownerId,
+    p_recurrence:  event.recurrence ?? 'none',
   });
-
-  return newEventRef.id;
+  if (error) throw new Error(error.message);
+  return data as string;
 }
 
 /**
- * Aggiorna un evento della sala riunioni in modo atomico.
- * Rimuove lo slot precedente dal lock doc e controlla che il nuovo orario
- * non confligga con le prenotazioni esistenti.
- *
- * @param id                       - ID Firestore dell'evento
- * @param updates                  - campi da aggiornare
- * @param currentDate              - data attuale dell'evento (necessaria per individuare il lock doc)
- * @param existingRoomEventsForDay - snapshot locale degli eventi nello stesso giorno (per bootstrap)
+ * Aggiorna un evento sala con controllo atomico degli overlap.
  */
 export async function updateRoomEvent(
   id: string,
   updates: Partial<Omit<CalendarEvent, 'id' | 'ownerId' | 'createdAt'>>,
   currentDate: Date,
-  existingRoomEventsForDay: CalendarEvent[],
 ): Promise<void> {
-  const eventRef = doc(db, EVENTS_COLLECTION, id);
-  const lockRef  = doc(db, ROOM_LOCKS_COLLECTION, roomLockId(currentDate));
+  // Per l'update atomico della sala usiamo la RPC; recuperiamo i dati attuali
+  // per riempire i campi non modificati
+  const { data: existing, error: fetchErr } = await supabase
+    .from('events')
+    .select('*')
+    .eq('id', id)
+    .single();
+  if (fetchErr) throw new Error(fetchErr.message);
 
-  await runTransaction(db, async (tx) => {
-    const [eventSnap, lockSnap] = await Promise.all([tx.get(eventRef), tx.get(lockRef)]);
-    if (!eventSnap.exists()) throw new Error('Evento non trovato');
-
-    const current = eventSnap.data() as FirestoreEvent;
-    const slots: SlotMap = lockSnap.exists()
-      ? ((lockSnap.data().slots ?? {}) as SlotMap)
-      : slotsFromEvents(existingRoomEventsForDay);
-
-    const newStart = updates.startTime ?? current.startTime;
-    const newEnd   = updates.endTime   ?? current.endTime;
-    const newTitle = updates.title     ?? current.title;
-
-    const conflict = findConflict(slots, newStart, newEnd, id);
-    if (conflict) {
-      throw new Error(
-        `Sala già occupata: "${conflict.title}" (${conflict.start}–${conflict.end})`,
-      );
-    }
-
-    const updatedSlots: SlotMap = {
-      ...slots,
-      [id]: { start: newStart, end: newEnd, title: newTitle },
-    };
-
-    const firestoreUpdates: Partial<FirestoreEvent> = {};
-    if (updates.title       !== undefined) firestoreUpdates.title       = updates.title;
-    if (updates.description !== undefined) firestoreUpdates.description = updates.description;
-    if (updates.startTime   !== undefined) firestoreUpdates.startTime   = updates.startTime;
-    if (updates.endTime     !== undefined) firestoreUpdates.endTime     = updates.endTime;
-    if (updates.calendarId  !== undefined) firestoreUpdates.calendarId  = updates.calendarId;
-    if (updates.date        !== undefined) firestoreUpdates.date        = format(updates.date, 'yyyy-MM-dd');
-    if (updates.recurrence  !== undefined) firestoreUpdates.recurrence  = updates.recurrence;
-
-    tx.update(eventRef, firestoreUpdates);
-    tx.set(lockRef, { slots: updatedSlots, updatedAt: new Date().toISOString() });
+  const cur = fromDb(existing as DbEvent);
+  const { error } = await supabase.rpc('update_room_event', {
+    p_id:          id,
+    p_title:       updates.title       ?? cur.title,
+    p_date:        format(updates.date ?? currentDate, 'yyyy-MM-dd'),
+    p_start:       updates.startTime   ?? cur.startTime,
+    p_end:         updates.endTime     ?? cur.endTime,
+    p_calendar_id: updates.calendarId  ?? cur.calendarId,
+    p_description: updates.description ?? cur.description ?? null,
+    p_recurrence:  updates.recurrence  ?? cur.recurrence  ?? 'none',
   });
+  if (error) throw new Error(error.message);
 }
 
 /**
- * Elimina un evento della sala riunioni rimuovendo anche la sua voce dal lock doc.
+ * Elimina un evento della sala riunioni (identico a deleteEvent — nessun lock necessario per DELETE).
  */
-export async function deleteRoomEvent(id: string, date: Date): Promise<void> {
-  const eventRef = doc(db, EVENTS_COLLECTION, id);
-  const lockRef  = doc(db, ROOM_LOCKS_COLLECTION, roomLockId(date));
-
-  await runTransaction(db, async (tx) => {
-    const lockSnap = await tx.get(lockRef);
-    if (lockSnap.exists()) {
-      const { [id]: _removed, ...updatedSlots } = (lockSnap.data().slots ?? {}) as SlotMap;
-      tx.set(lockRef, { slots: updatedSlots, updatedAt: new Date().toISOString() });
-    }
-    tx.delete(eventRef);
-  });
+export async function deleteRoomEvent(id: string): Promise<void> {
+  await deleteEvent(id);
 }
 
 // ─── Real-time subscription ───────────────────────────────────────────────────
 
-/**
- * Sottoscrive in real-time alla collezione eventi.
- * Ogni modifica (create/update/delete) invoca il callback con la lista aggiornata.
- * Restituisce unsubscribe da chiamare nel cleanup del hook.
- */
 export function subscribeToEvents(
   onUpdate: (events: CalendarEvent[]) => void,
-  onError: (error: Error) => void,
-): Unsubscribe {
-  return onSnapshot(
-    collection(db, EVENTS_COLLECTION),
-    (snapshot) => {
-      const events = snapshot.docs.map((d) =>
-        fromFirestoreEvent(d.id, d.data() as FirestoreEvent),
-      );
-      onUpdate(events);
-    },
-    onError,
-  );
+  onError:  (error: Error) => void,
+): () => void {
+  let current: CalendarEvent[] = [];
+
+  supabase
+    .from('events')
+    .select('*')
+    .then(({ data, error }) => {
+      if (error) { onError(new Error(error.message)); return; }
+      current = (data as DbEvent[]).map(fromDb);
+      onUpdate(current);
+    });
+
+  const channel = supabase
+    .channel('events-changes')
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'events' },
+      (payload) => {
+        if (payload.eventType === 'INSERT') {
+          current = [...current, fromDb(payload.new as DbEvent)];
+        } else if (payload.eventType === 'UPDATE') {
+          current = current.map((e) =>
+            e.id === (payload.new as DbEvent).id ? fromDb(payload.new as DbEvent) : e,
+          );
+        } else if (payload.eventType === 'DELETE') {
+          current = current.filter((e) => e.id !== (payload.old as DbEvent).id);
+        }
+        onUpdate(current);
+      },
+    )
+    .subscribe((status) => {
+      if (status === 'CHANNEL_ERROR') onError(new Error('Realtime events subscription failed'));
+    });
+
+  return () => { supabase.removeChannel(channel); };
 }
+
+// Re-export per retrocompatibilità con useEvents.ts
+export { MEETING_ROOM_ID };

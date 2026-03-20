@@ -1,75 +1,106 @@
-import {
-  collection,
-  deleteField,
-  doc,
-  getDoc,
-  onSnapshot,
-  setDoc,
-  updateDoc,
-  type Unsubscribe,
-} from 'firebase/firestore';
-import { db } from '@/firebase';
+import { supabase } from '@/lib/supabase';
 import type { Profile } from '@/types';
 
-const PROFILES_COLLECTION = 'profiles';
+// ─── Serializzazione snake_case ↔ camelCase ───────────────────────────────────
 
-/**
- * Recupera il profilo di un utente da Firestore.
- * Restituisce null se il profilo non esiste ancora.
- */
+type DbProfile = {
+  uid:          string;
+  display_name: string;
+  color:        string;
+  photo_url:    string | null;
+  ics_url:      string | null;
+};
+
+function fromDb(row: DbProfile): Profile {
+  return {
+    uid:         row.uid,
+    displayName: row.display_name,
+    color:       row.color,
+    photoURL:    row.photo_url  ?? undefined,
+    icsUrl:      row.ics_url    ?? undefined,
+  };
+}
+
+function toDb(profile: Partial<Profile> & { uid?: string }): Partial<DbProfile> {
+  const out: Partial<DbProfile> = {};
+  if (profile.uid          !== undefined) out.uid          = profile.uid;
+  if (profile.displayName  !== undefined) out.display_name = profile.displayName;
+  if (profile.color        !== undefined) out.color        = profile.color;
+  if ('photoURL' in profile) out.photo_url = profile.photoURL ?? null;
+  if ('icsUrl'   in profile) out.ics_url   = profile.icsUrl   ?? null;
+  return out;
+}
+
+// ─── CRUD ─────────────────────────────────────────────────────────────────────
+
 export async function getProfile(uid: string): Promise<Profile | null> {
-  const ref = doc(db, PROFILES_COLLECTION, uid);
-  const snap = await getDoc(ref);
-  if (!snap.exists()) return null;
-  return snap.data() as Profile;
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('uid', uid)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data ? fromDb(data as DbProfile) : null;
 }
 
-/**
- * Crea o sovrascrive completamente il profilo di un utente.
- * Usato al primo accesso per inizializzare il profilo.
- *
- * Rimuove i campi con valore undefined prima di scrivere su Firestore,
- * che rifiuta esplicitamente undefined come valore di campo (a differenza di null).
- */
 export async function createProfile(profile: Profile): Promise<void> {
-  const ref = doc(db, PROFILES_COLLECTION, profile.uid);
-  const sanitized = Object.fromEntries(
-    Object.entries(profile).filter(([, v]) => v !== undefined),
-  );
-  await setDoc(ref, sanitized);
+  const { error } = await supabase
+    .from('profiles')
+    .insert(toDb(profile));
+  if (error) throw new Error(error.message);
 }
 
-/**
- * Aggiorna campi specifici del profilo (patch, non sovrascrittura).
- * Utile per aggiornare displayName, color o photoURL singolarmente.
- */
 export async function updateProfile(
   uid: string,
   updates: Partial<Omit<Profile, 'uid'>>,
 ): Promise<void> {
-  const ref = doc(db, PROFILES_COLLECTION, uid);
-  // Firestore non accetta undefined: converte i campi undefined in deleteField()
-  const sanitized = Object.fromEntries(
-    Object.entries(updates).map(([k, v]) => [k, v === undefined ? deleteField() : v]),
-  );
-  await updateDoc(ref, sanitized);
+  const { error } = await supabase
+    .from('profiles')
+    .update(toDb(updates))
+    .eq('uid', uid);
+  if (error) throw new Error(error.message);
 }
 
-/**
- * Sottoscrive in real-time alla collezione profiles.
- * Il callback viene invocato ad ogni modifica.
- * Restituisce la funzione di unsubscribe da chiamare al cleanup.
- */
+// ─── Real-time subscription ───────────────────────────────────────────────────
+
 export function subscribeToProfiles(
   onUpdate: (profiles: Profile[]) => void,
-  onError: (error: Error) => void,
-): Unsubscribe {
-  return onSnapshot(
-    collection(db, PROFILES_COLLECTION),
-    (snapshot) => {
-      const profiles = snapshot.docs.map((d) => d.data() as Profile);
-      onUpdate(profiles);
-    },
-    onError,
-  );
+  onError:  (error: Error) => void,
+): () => void {
+  let current: Profile[] = [];
+
+  // Fetch iniziale
+  supabase
+    .from('profiles')
+    .select('*')
+    .then(({ data, error }) => {
+      if (error) { onError(new Error(error.message)); return; }
+      current = (data as DbProfile[]).map(fromDb);
+      onUpdate(current);
+    });
+
+  // Subscription real-time
+  const channel = supabase
+    .channel('profiles-changes')
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'profiles' },
+      (payload) => {
+        if (payload.eventType === 'INSERT') {
+          current = [...current, fromDb(payload.new as DbProfile)];
+        } else if (payload.eventType === 'UPDATE') {
+          current = current.map((p) =>
+            p.uid === (payload.new as DbProfile).uid ? fromDb(payload.new as DbProfile) : p,
+          );
+        } else if (payload.eventType === 'DELETE') {
+          current = current.filter((p) => p.uid !== (payload.old as DbProfile).uid);
+        }
+        onUpdate(current);
+      },
+    )
+    .subscribe((status) => {
+      if (status === 'CHANNEL_ERROR') onError(new Error('Realtime profiles subscription failed'));
+    });
+
+  return () => { supabase.removeChannel(channel); };
 }

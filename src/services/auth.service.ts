@@ -1,83 +1,67 @@
-import {
-  GoogleAuthProvider,
-  signInWithPopup,
-  signOut,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  updateProfile,
-  browserLocalPersistence,
-  browserSessionPersistence,
-  setPersistence,
-  type User,
-} from 'firebase/auth';
-import { auth } from '@/firebase';
+import type { User } from '@supabase/supabase-js';
+import { supabase } from '@/lib/supabase';
 
-const googleProvider = new GoogleAuthProvider();
-
-/**
- * Avvia il flusso di login con Google tramite popup.
- */
-export async function loginWithGoogle(): Promise<User> {
-  const result = await signInWithPopup(auth, googleProvider);
-  return result.user;
-}
+export type { User };
 
 /**
  * Login con email e password.
- *
- * @param remember - true → persiste dopo la chiusura del browser (localStorage);
- *                   false → sessione singola (sessionStorage, si svuota alla chiusura del tab)
+ * La persistenza della sessione è gestita automaticamente da Supabase (localStorage).
  */
 export async function loginWithEmail(
   email: string,
   password: string,
-  remember: boolean,
+  _remember: boolean,
 ): Promise<User> {
-  await setPersistence(
-    auth,
-    remember ? browserLocalPersistence : browserSessionPersistence,
-  );
-  const result = await signInWithEmailAndPassword(auth, email, password);
-  return result.user;
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) throw error;
+  return data.user;
 }
 
 /**
  * Registrazione con email e password.
- * Imposta anche il displayName ricavato dalla parte locale dell'email.
+ * Imposta display_name nei metadati utente.
  */
 export async function registerWithEmail(
   email: string,
   password: string,
 ): Promise<User> {
-  const result = await createUserWithEmailAndPassword(auth, email, password);
-  // Imposta il displayName di default come la parte prima della @ dell'email
-  const defaultName = email.split('@')[0];
-  await updateProfile(result.user, { displayName: defaultName });
-  return result.user;
+  const displayName = email.split('@')[0];
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: { data: { display_name: displayName } },
+  });
+  if (error) throw error;
+  if (!data.user) throw new Error('Registrazione fallita');
+  return data.user;
 }
 
 /**
- * Mappa i codici di errore Firebase in messaggi leggibili in italiano.
+ * Mappa i messaggi di errore Supabase Auth in italiano.
  */
-export function humanizeAuthError(code: string): string {
-  const map: Record<string, string> = {
-    'auth/invalid-email':            'Indirizzo email non valido.',
-    'auth/user-not-found':           'Nessun account trovato con questa email.',
-    'auth/wrong-password':           'Password errata.',
-    'auth/invalid-credential':       'Credenziali non valide.',
-    'auth/email-already-in-use':     'Email già in uso da un altro account.',
-    'auth/weak-password':            'La password deve avere almeno 6 caratteri.',
-    'auth/too-many-requests':        'Troppi tentativi. Riprova tra qualche minuto.',
-    'auth/network-request-failed':   'Errore di rete. Controlla la connessione.',
-    'auth/popup-closed-by-user':     'Login annullato.',
-    'auth/cancelled-popup-request':  'Login annullato.',
-  };
-  return map[code] ?? 'Errore di autenticazione. Riprova.';
+export function humanizeAuthError(message: string): string {
+  const m = message.toLowerCase();
+  if (m.includes('invalid login credentials') || m.includes('invalid credentials'))
+    return 'Email o password non corretti.';
+  if (m.includes('email not confirmed'))
+    return 'Controlla la tua email e conferma la registrazione.';
+  if (m.includes('user already registered') || m.includes('already been registered'))
+    return 'Email già in uso da un altro account.';
+  if (m.includes('password'))
+    return 'La password deve avere almeno 6 caratteri.';
+  if (m.includes('rate limit') || m.includes('too many'))
+    return 'Troppi tentativi. Riprova tra qualche minuto.';
+  if (m.includes('network') || m.includes('fetch'))
+    return 'Errore di rete. Controlla la connessione.';
+  if (m.includes('email'))
+    return 'Indirizzo email non valido.';
+  return 'Errore di autenticazione. Riprova.';
 }
 
 /**
  * Esegue il logout dell'utente corrente.
  */
 export async function logout(): Promise<void> {
-  await signOut(auth);
+  const { error } = await supabase.auth.signOut();
+  if (error) throw error;
 }

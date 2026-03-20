@@ -11,3 +11,4 @@ coverage/
 
 # Config Firebase generata da AI Studio (migrata in .env)
 firebase-applet-config.json
+.vercel

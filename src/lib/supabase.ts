@@ -4,7 +4,7 @@ const supabaseUrl     = import.meta.env.VITE_SUPABASE_URL as string;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
 /**
- * Client Supabase usato esclusivamente per Firebase Storage.
- * L'autenticazione dell'app rimane su Firebase Auth + Firestore.
+ * Client Supabase unico per Auth, Database e Storage.
+ * Sostituisce completamente Firebase.
  */
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);

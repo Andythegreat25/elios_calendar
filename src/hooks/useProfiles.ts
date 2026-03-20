@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { User } from 'firebase/auth';
+import type { User } from '@supabase/supabase-js';
 import type { Profile } from '@/types';
 import {
   getProfile,
@@ -59,17 +59,17 @@ export function useProfiles(user: User | null): UseProfilesReturn {
       for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
         if (cancelled) break;
         try {
-          const existing = await getProfile(user.uid);
+          const existing = await getProfile(user.id);
           if (!existing && !cancelled) {
             const defaultColors = ['#a881f3', '#2dd4bf', '#f472b6', '#60a5fa', '#fb923c'];
             const color = defaultColors[Math.floor(Math.random() * defaultColors.length)];
-            // Non includere photoURL se null/undefined — Firestore rifiuta il valore undefined
             const newProfile: Profile = {
-              uid:         user.uid,
-              displayName: user.displayName ?? user.email?.split('@')[0] ?? 'Utente',
+              uid:         user.id,
+              displayName: (user.user_metadata?.display_name as string | undefined)
+                            ?? user.email?.split('@')[0]
+                            ?? 'Utente',
               color,
             };
-            if (user.photoURL) newProfile.photoURL = user.photoURL;
             await createProfile(newProfile);
           }
           break; // successo — esci dal loop
@@ -94,7 +94,7 @@ export function useProfiles(user: User | null): UseProfilesReturn {
         (updated) => {
           if (cancelled) return;
           setProfiles(updated);
-          setCurrentProfile(updated.find((p) => p.uid === user.uid) ?? null);
+          setCurrentProfile(updated.find((p) => p.uid === user.id) ?? null);
         },
         (err) => {
           if (cancelled) return;
@@ -116,7 +116,7 @@ export function useProfiles(user: User | null): UseProfilesReturn {
     if (!user) return;
     setError(null);
     try {
-      await updateProfile(user.uid, updates);
+      await updateProfile(user.id, updates);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Errore salvataggio profilo';
       setError(message);
