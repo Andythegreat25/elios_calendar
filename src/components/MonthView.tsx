@@ -10,9 +10,10 @@ interface MonthViewProps {
   calendars: Calendar[];
   onSlotClick: (date: Date, time: string) => void;
   onEventClick: (event: CalendarEvent) => void;
+  onDayExpand?: (date: Date) => void;
 }
 
-export function MonthView({ currentDate, events, calendars, onSlotClick, onEventClick }: MonthViewProps) {
+export function MonthView({ currentDate, events, calendars, onSlotClick, onEventClick, onDayExpand }: MonthViewProps) {
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
   const gridStart = startOfWeek(monthStart, { weekStartsOn: 1 });
@@ -128,9 +129,13 @@ export function MonthView({ currentDate, events, calendars, onSlotClick, onEvent
                   );
                 })}
                 {hiddenCount > 0 && (
-                  <div className="text-[11px] text-zinc-400 font-medium px-1">
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onDayExpand?.(day); }}
+                    className="text-[11px] text-zinc-400 hover:text-zinc-600 font-medium px-1 text-left transition-colors"
+                  >
                     +{hiddenCount} altri
-                  </div>
+                  </button>
                 )}
               </div>
             </div>

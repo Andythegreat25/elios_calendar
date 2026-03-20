@@ -53,6 +53,8 @@ export function SettingsModal({ isOpen, onClose, profile, onSave }: SettingsModa
   const [isSaving, setIsSaving] = useState(false);
   const [isProcessingImage, setIsProcessingImage] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
+  const [isTestingIcs, setIsTestingIcs] = useState(false);
+  const [icsTestResult, setIcsTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -64,6 +66,24 @@ export function SettingsModal({ isOpen, onClose, profile, onSave }: SettingsModa
       setModalError(null);
     }
   }, [isOpen, profile]);
+
+  const handleTestIcs = async () => {
+    const url = icsUrl.trim();
+    if (!url) return;
+    setIsTestingIcs(true);
+    setIcsTestResult(null);
+    try {
+      const res = await fetch(`/api/ics-proxy?url=${encodeURIComponent(url)}`);
+      if (!res.ok) throw new Error(`Errore HTTP ${res.status}`);
+      const text = await res.text();
+      const count = (text.match(/BEGIN:VEVENT/g) ?? []).length;
+      setIcsTestResult({ ok: true, msg: `Feed valido — ${count} event${count === 1 ? 'o' : 'i'} trovati` });
+    } catch (err) {
+      setIcsTestResult({ ok: false, msg: err instanceof Error ? err.message : 'Feed non raggiungibile' });
+    } finally {
+      setIsTestingIcs(false);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -251,10 +271,26 @@ export function SettingsModal({ isOpen, onClose, profile, onSave }: SettingsModa
                 className="w-full pl-9 pr-4 py-2 bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-900 transition-all text-sm font-mono"
               />
             </div>
-            <p className="text-xs text-zinc-400 mt-1">
-              In Outlook: File → Impostazioni account → Calendari Internet → copia l'URL ICS.
-              I tuoi eventi saranno visibili in sola lettura ai colleghi.
-            </p>
+            <div className="flex items-center gap-2 mt-1">
+              <p className="text-xs text-zinc-400 flex-1">
+                In Outlook: File → Impostazioni account → Calendari Internet → copia l'URL ICS.
+              </p>
+              {icsUrl.trim() && (
+                <button
+                  type="button"
+                  onClick={handleTestIcs}
+                  disabled={isTestingIcs}
+                  className="text-xs text-zinc-500 hover:text-zinc-900 border border-zinc-200 hover:border-zinc-400 rounded-lg px-2 py-1 transition-all whitespace-nowrap disabled:opacity-50"
+                >
+                  {isTestingIcs ? '...' : 'Testa'}
+                </button>
+              )}
+            </div>
+            {icsTestResult && (
+              <p className={`text-xs mt-1 font-medium ${icsTestResult.ok ? 'text-green-600' : 'text-red-500'}`}>
+                {icsTestResult.ok ? '✓' : '✗'} {icsTestResult.msg}
+              </p>
+            )}
           </div>
 
           {modalError && (

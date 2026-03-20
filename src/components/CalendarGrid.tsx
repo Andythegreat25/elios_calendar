@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { CalendarEvent, Calendar } from '@/types';
 import { format, isSameDay, addDays, startOfWeek, isToday } from 'date-fns';
 import { it } from 'date-fns/locale';
@@ -17,12 +18,20 @@ interface CalendarGridProps {
 export function CalendarGrid({
   currentDate, view, events, calendars, onSlotClick, onEventClick,
 }: CalendarGridProps) {
+  const [flashSlot, setFlashSlot] = useState<string | null>(null);
+
+  const handleSlotClick = (day: Date, time: string, key: string) => {
+    setFlashSlot(key);
+    setTimeout(() => setFlashSlot(null), 250);
+    onSlotClick(day, time);
+  };
+
   const days = view === 'week'
     ? Array.from({ length: 7 }, (_, i) =>
         addDays(startOfWeek(currentDate, { weekStartsOn: 1 }), i))
     : [currentDate];
 
-  const timeSlots = generateTimeSlots(8, 20);
+  const timeSlots = generateTimeSlots(7, 21);
 
   const visibleCalendarIds = new Set(
     calendars.filter((c) => c.visible !== false).map((c) => c.id),
@@ -106,13 +115,19 @@ export function CalendarGrid({
                   className="relative border-r border-zinc-100/50 last:border-r-0"
                 >
                   {/* Slot cliccabili */}
-                  {timeSlots.map((time, timeIdx) => (
-                    <div
-                      key={timeIdx}
-                      onClick={() => onSlotClick(day, time)}
-                      className="h-20 cursor-pointer hover:bg-zinc-50/50 transition-colors"
-                    />
-                  ))}
+                  {timeSlots.map((time, timeIdx) => {
+                    const slotKey = `${dayIdx}-${timeIdx}`;
+                    return (
+                      <div
+                        key={timeIdx}
+                        onClick={() => handleSlotClick(day, time, slotKey)}
+                        className={cn(
+                          'h-20 cursor-pointer transition-colors duration-150',
+                          flashSlot === slotKey ? 'bg-zinc-200/60' : 'hover:bg-zinc-50/50',
+                        )}
+                      />
+                    );
+                  })}
 
                   {/* Eventi posizionati in assoluto */}
                   {dayEvents.map((event) => {

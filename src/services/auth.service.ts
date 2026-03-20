@@ -65,6 +65,16 @@ export function humanizeAuthError(message: string): string {
 }
 
 /**
+ * Invia email di reset password tramite Supabase Auth.
+ */
+export async function sendPasswordReset(email: string): Promise<void> {
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: window.location.origin,
+  });
+  if (error) throw error;
+}
+
+/**
  * Esegue il logout dell'utente corrente.
  */
 export async function logout(): Promise<void> {

@@ -55,7 +55,7 @@ export const getEventPosition = (
 
   const startMinutes = startH * 60 + startM;
   const endMinutes   = endH   * 60 + endM;
-  const dayStart     = 8 * 60; // 08:00
+  const dayStart     = 7 * 60; // 07:00
 
   const top    = ((startMinutes - dayStart) / 30) * 80;
   const height = ((endMinutes - startMinutes) / 30) * 80;

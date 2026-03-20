@@ -24,16 +24,17 @@ function LoadingScreen() {
 interface LoginScreenProps {
   onEmailLogin: (email: string, password: string, remember: boolean) => Promise<void>;
   onEmailRegister: (email: string, password: string) => Promise<void>;
+  onResetPassword: (email: string) => Promise<void>;
   isLoading: boolean;
   error: string | null;
   onClearError: () => void;
 }
 
 function LoginScreen({
-  onEmailLogin, onEmailRegister,
+  onEmailLogin, onEmailRegister, onResetPassword,
   isLoading, error, onClearError,
 }: LoginScreenProps) {
-  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [mode, setMode] = useState<'login' | 'register' | 'forgot'>('login');
   const [email, setEmail] = useState(() => localStorage.getItem('elios_last_email') ?? '');
   const [password, setPassword] = useState('');
   const [remember, setRemember] = useState(true);
@@ -44,19 +45,25 @@ function LoginScreen({
     setter(e.target.value);
   };
 
+  const [resetSent, setResetSent] = useState(false);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (mode === 'login') {
       if (remember) localStorage.setItem('elios_last_email', email);
       else localStorage.removeItem('elios_last_email');
       await onEmailLogin(email, password, remember);
-    } else {
+    } else if (mode === 'register') {
       await onEmailRegister(email, password);
+    } else {
+      await onResetPassword(email);
+      if (!error) setResetSent(true);
     }
   };
 
   const switchMode = () => {
     setMode((m) => (m === 'login' ? 'register' : 'login'));
+    setResetSent(false);
     onClearError();
   };
 
@@ -71,13 +78,18 @@ function LoginScreen({
             Elios Workspace
           </h1>
           <p className="text-zinc-400 mt-2 text-sm text-center leading-relaxed">
-            {mode === 'login'
-              ? 'Accedi per gestire gli appuntamenti del team.'
-              : 'Crea un account per unirti al team.'}
+            {mode === 'login' && 'Accedi per gestire gli appuntamenti del team.'}
+            {mode === 'register' && 'Crea un account per unirti al team.'}
+            {mode === 'forgot' && 'Inserisci la tua email per ricevere il link di reset.'}
           </p>
         </div>
 
         {/* Form email/password */}
+        {resetSent && (
+          <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-sm text-green-700 font-medium mb-4">
+            Email inviata! Controlla la casella e clicca il link per reimpostare la password.
+          </div>
+        )}
         <form onSubmit={handleSubmit} className="space-y-3">
           <input
             id="email"
@@ -91,27 +103,42 @@ function LoginScreen({
             className="w-full px-4 py-3 rounded-xl border border-zinc-200 bg-zinc-50 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-400 transition-all"
           />
 
-          <div className="relative">
-            <input
-              id="password"
-              name="password"
-              type={showPassword ? 'text' : 'password'}
-              placeholder="Password"
-              value={password}
-              onChange={handleChange(setPassword)}
-              required
-              autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-              className="w-full px-4 py-3 pr-11 rounded-xl border border-zinc-200 bg-zinc-50 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-400 transition-all"
-            />
-            <button
-              type="button"
-              tabIndex={-1}
-              onClick={() => setShowPassword((v) => !v)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 transition-colors"
-            >
-              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-            </button>
-          </div>
+          {mode !== 'forgot' && (
+            <div className="relative">
+              <input
+                id="password"
+                name="password"
+                type={showPassword ? 'text' : 'password'}
+                placeholder="Password"
+                value={password}
+                onChange={handleChange(setPassword)}
+                required
+                autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                className="w-full px-4 py-3 pr-11 rounded-xl border border-zinc-200 bg-zinc-50 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-400 transition-all"
+              />
+              <button
+                type="button"
+                tabIndex={-1}
+                onClick={() => setShowPassword((v) => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 transition-colors"
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          )}
+
+          {/* Link "Password dimenticata?" visibile solo nel login */}
+          {mode === 'login' && (
+            <div className="text-right -mt-1">
+              <button
+                type="button"
+                onClick={() => { setMode('forgot'); setResetSent(false); onClearError(); }}
+                className="text-xs text-zinc-400 hover:text-zinc-700 transition-colors"
+              >
+                Password dimenticata?
+              </button>
+            </div>
+          )}
 
           {/* Ricordami (solo in modalità login) */}
           {mode === 'login' && (
@@ -148,21 +175,33 @@ function LoginScreen({
             {isLoading ? (
               <Spinner size="sm" className="border-zinc-500 border-t-white" />
             ) : (
-              mode === 'login' ? 'Accedi' : 'Crea account'
+              mode === 'login' ? 'Accedi' : mode === 'register' ? 'Crea account' : 'Invia email di reset'
             )}
           </button>
         </form>
 
-        {/* Toggle login / registrazione */}
+        {/* Toggle login / registrazione / torna al login */}
         <p className="text-center text-sm text-zinc-400 mt-6">
-          {mode === 'login' ? 'Non hai un account?' : 'Hai già un account?'}{' '}
-          <button
-            type="button"
-            onClick={switchMode}
-            className="text-zinc-700 font-medium hover:text-zinc-900 transition-colors underline underline-offset-2"
-          >
-            {mode === 'login' ? 'Registrati' : 'Accedi'}
-          </button>
+          {mode === 'forgot' ? (
+            <button
+              type="button"
+              onClick={() => { setMode('login'); setResetSent(false); onClearError(); }}
+              className="text-zinc-700 font-medium hover:text-zinc-900 transition-colors underline underline-offset-2"
+            >
+              ← Torna al login
+            </button>
+          ) : (
+            <>
+              {mode === 'login' ? 'Non hai un account?' : 'Hai già un account?'}{' '}
+              <button
+                type="button"
+                onClick={switchMode}
+                className="text-zinc-700 font-medium hover:text-zinc-900 transition-colors underline underline-offset-2"
+              >
+                {mode === 'login' ? 'Registrati' : 'Accedi'}
+              </button>
+            </>
+          )}
         </p>
       </div>
     </div>
@@ -172,13 +211,14 @@ function LoginScreen({
 // ─── Auth gate ────────────────────────────────────────────────────────────────
 
 function AuthGate() {
-  const { user, isAuthReady, isLoggingIn, loginEmail, registerEmail, error, clearError } = useAuth();
+  const { user, isAuthReady, isLoggingIn, loginEmail, registerEmail, resetPassword, error, clearError } = useAuth();
 
   if (!isAuthReady) return <LoadingScreen />;
   if (!user) return (
     <LoginScreen
       onEmailLogin={loginEmail}
       onEmailRegister={registerEmail}
+      onResetPassword={resetPassword}
       isLoading={isLoggingIn}
       error={error}
       onClearError={clearError}

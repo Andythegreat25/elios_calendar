@@ -66,6 +66,14 @@ export function EventModal({
 
   const isOwner = editEvent ? editEvent.ownerId === currentUserId : true;
 
+  const isPastDate = (() => {
+    if (!date) return false;
+    const [y, m, d] = date.split('-').map(Number);
+    const eventDay = new Date(y, m - 1, d);
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    return eventDay < today;
+  })();
+
   /** Aggiorna startTime e sposta endTime in avanti se necessario */
   const handleStartTimeChange = (newStart: string) => {
     setStartTime(newStart);
@@ -135,6 +143,11 @@ export function EventModal({
         </div>
 
         <form onSubmit={handleSubmit} className="px-8 pb-8 space-y-6">
+          {isPastDate && (
+            <div className="bg-amber-50 border border-amber-200/60 rounded-2xl px-4 py-2.5 text-xs text-amber-700 font-medium">
+              Stai creando o modificando un evento nel passato
+            </div>
+          )}
           <div className="space-y-4">
             {/* Data */}
             <div className="flex items-center gap-4">

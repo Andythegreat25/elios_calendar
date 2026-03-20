@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { format, addWeeks, subWeeks, addDays, subDays, addMonths, subMonths, isSameDay } from 'date-fns';
 import { it } from 'date-fns/locale';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Search } from 'lucide-react';
 import { cn } from '@/utils/cn';
 
 import { Sidebar } from '@/components/Sidebar';
@@ -10,6 +10,7 @@ import { CalendarGrid } from '@/components/CalendarGrid';
 import { MonthView } from '@/components/MonthView';
 import { EventModal } from '@/components/EventModal';
 import { SettingsModal } from '@/components/SettingsModal';
+import { SearchModal } from '@/components/SearchModal';
 import { Toast } from '@/components/ui/Toast';
 
 import { useProfiles } from '@/hooks/useProfiles';
@@ -83,6 +84,7 @@ export function CalendarPage({ user }: CalendarPageProps) {
   const [view, setView] = useState<ViewType>('week');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<SelectedSlot | null>(null);
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
 
@@ -271,6 +273,15 @@ export function CalendarPage({ user }: CalendarPageProps) {
               </div>
             </div>
 
+            {/* Ricerca */}
+            <button
+              onClick={() => setIsSearchOpen(true)}
+              className="p-2.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-900 rounded-full transition-all"
+              aria-label="Cerca eventi"
+            >
+              <Search className="w-5 h-5" />
+            </button>
+
             {/* Toggle vista giorno/settimana/mese */}
             <div className="flex items-center bg-zinc-100/50 p-1 rounded-full border border-zinc-200/50">
               {(['day', 'week', 'month'] as ViewType[]).map((v) => (
@@ -298,6 +309,7 @@ export function CalendarPage({ user }: CalendarPageProps) {
                 calendars={calendars}
                 onSlotClick={handleSlotClick}
                 onEventClick={handleEventClick}
+                onDayExpand={(date) => { setCurrentDate(date); setView('week'); }}
               />
             ) : (
               <CalendarGrid
@@ -335,6 +347,14 @@ export function CalendarPage({ user }: CalendarPageProps) {
         onClose={() => setIsSettingsOpen(false)}
         profile={currentProfile}
         onSave={handleSaveProfile}
+      />
+
+      <SearchModal
+        isOpen={isSearchOpen}
+        onClose={() => setIsSearchOpen(false)}
+        events={allEvents}
+        calendars={calendars}
+        onEventClick={(event) => { handleEventClick(event); setIsSearchOpen(false); }}
       />
 
       {/* Toast errori */}

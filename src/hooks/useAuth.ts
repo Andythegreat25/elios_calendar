@@ -6,6 +6,7 @@ import {
   registerWithEmail,
   humanizeAuthError,
   logout,
+  sendPasswordReset,
 } from '@/services/auth.service';
 
 export type { User };
@@ -16,6 +17,7 @@ interface UseAuthReturn {
   isLoggingIn: boolean;
   loginEmail: (email: string, password: string, remember: boolean) => Promise<void>;
   registerEmail: (email: string, password: string) => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
   logoutUser: () => Promise<void>;
   error: string | null;
   clearError: () => void;
@@ -69,6 +71,19 @@ export function useAuth(): UseAuthReturn {
     }
   };
 
+  const resetPassword = async (email: string) => {
+    setIsLoggingIn(true);
+    setError(null);
+    try {
+      await sendPasswordReset(email);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Errore invio email';
+      setError(humanizeAuthError(message));
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
   const logoutUser = async () => {
     setError(null);
     try {
@@ -81,5 +96,5 @@ export function useAuth(): UseAuthReturn {
 
   const clearError = () => setError(null);
 
-  return { user, isAuthReady, isLoggingIn, loginEmail, registerEmail, logoutUser, error, clearError };
+  return { user, isAuthReady, isLoggingIn, loginEmail, registerEmail, resetPassword, logoutUser, error, clearError };
 }
