@@ -143,41 +143,33 @@ export async function deleteRoomEvent(id: string): Promise<void> {
 
 // ─── Real-time subscription ───────────────────────────────────────────────────
 
+async function fetchAllEvents(): Promise<CalendarEvent[]> {
+  const { data, error } = await supabase.from('events').select('*');
+  if (error) throw new Error(error.message);
+  return (data as DbEvent[]).map(fromDb);
+}
+
 export function subscribeToEvents(
   onUpdate: (events: CalendarEvent[]) => void,
   onError:  (error: Error) => void,
 ): () => void {
-  let current: CalendarEvent[] = [];
-
-  supabase
-    .from('events')
-    .select('*')
-    .then(({ data, error }) => {
-      if (error) { onError(new Error(error.message)); return; }
-      current = (data as DbEvent[]).map(fromDb);
-      onUpdate(current);
-    });
+  const channelName = `events-changes-${Date.now()}`;
 
   const channel = supabase
-    .channel('events-changes')
+    .channel(channelName)
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'events' },
-      (payload) => {
-        if (payload.eventType === 'INSERT') {
-          current = [...current, fromDb(payload.new as DbEvent)];
-        } else if (payload.eventType === 'UPDATE') {
-          current = current.map((e) =>
-            e.id === (payload.new as DbEvent).id ? fromDb(payload.new as DbEvent) : e,
-          );
-        } else if (payload.eventType === 'DELETE') {
-          current = current.filter((e) => e.id !== (payload.old as DbEvent).id);
-        }
-        onUpdate(current);
+      () => {
+        fetchAllEvents().then(onUpdate).catch(onError);
       },
     )
     .subscribe((status) => {
-      if (status === 'CHANNEL_ERROR') onError(new Error('Realtime events subscription failed'));
+      if (status === 'SUBSCRIBED') {
+        fetchAllEvents().then(onUpdate).catch(onError);
+      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        onError(new Error(`Realtime events: ${status}`));
+      }
     });
 
   return () => { supabase.removeChannel(channel); };

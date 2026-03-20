@@ -106,41 +106,33 @@ export async function cleanupDuplicateCalendars(userId: string): Promise<void> {
 
 // ─── Real-time subscription ───────────────────────────────────────────────────
 
+async function fetchAllCalendars(): Promise<Omit<Calendar, 'visible'>[]> {
+  const { data, error } = await supabase.from('calendars').select('*');
+  if (error) throw new Error(error.message);
+  return (data as DbCalendar[]).map(fromDb);
+}
+
 export function subscribeToCalendars(
   onUpdate: (calendars: Omit<Calendar, 'visible'>[]) => void,
   onError:  (error: Error) => void,
 ): () => void {
-  let current: Omit<Calendar, 'visible'>[] = [];
-
-  supabase
-    .from('calendars')
-    .select('*')
-    .then(({ data, error }) => {
-      if (error) { onError(new Error(error.message)); return; }
-      current = (data as DbCalendar[]).map(fromDb);
-      onUpdate(current);
-    });
+  const channelName = `calendars-changes-${Date.now()}`;
 
   const channel = supabase
-    .channel('calendars-changes')
+    .channel(channelName)
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'calendars' },
-      (payload) => {
-        if (payload.eventType === 'INSERT') {
-          current = [...current, fromDb(payload.new as DbCalendar)];
-        } else if (payload.eventType === 'UPDATE') {
-          current = current.map((c) =>
-            c.id === (payload.new as DbCalendar).id ? fromDb(payload.new as DbCalendar) : c,
-          );
-        } else if (payload.eventType === 'DELETE') {
-          current = current.filter((c) => c.id !== (payload.old as DbCalendar).id);
-        }
-        onUpdate(current);
+      () => {
+        fetchAllCalendars().then(onUpdate).catch(onError);
       },
     )
     .subscribe((status) => {
-      if (status === 'CHANNEL_ERROR') onError(new Error('Realtime calendars subscription failed'));
+      if (status === 'SUBSCRIBED') {
+        fetchAllCalendars().then(onUpdate).catch(onError);
+      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        onError(new Error(`Realtime calendars: ${status}`));
+      }
     });
 
   return () => { supabase.removeChannel(channel); };

@@ -46,7 +46,7 @@ export async function getProfile(uid: string): Promise<Profile | null> {
 export async function createProfile(profile: Profile): Promise<void> {
   const { error } = await supabase
     .from('profiles')
-    .insert(toDb(profile));
+    .upsert(toDb(profile), { onConflict: 'uid', ignoreDuplicates: true });
   if (error) throw new Error(error.message);
 }
 
@@ -63,43 +63,35 @@ export async function updateProfile(
 
 // ─── Real-time subscription ───────────────────────────────────────────────────
 
+async function fetchAllProfiles(): Promise<Profile[]> {
+  const { data, error } = await supabase.from('profiles').select('*');
+  if (error) throw new Error(error.message);
+  return (data as DbProfile[]).map(fromDb);
+}
+
 export function subscribeToProfiles(
   onUpdate: (profiles: Profile[]) => void,
   onError:  (error: Error) => void,
 ): () => void {
-  let current: Profile[] = [];
+  const channelName = `profiles-changes-${Date.now()}`;
 
-  // Fetch iniziale
-  supabase
-    .from('profiles')
-    .select('*')
-    .then(({ data, error }) => {
-      if (error) { onError(new Error(error.message)); return; }
-      current = (data as DbProfile[]).map(fromDb);
-      onUpdate(current);
-    });
-
-  // Subscription real-time
   const channel = supabase
-    .channel('profiles-changes')
+    .channel(channelName)
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'profiles' },
-      (payload) => {
-        if (payload.eventType === 'INSERT') {
-          current = [...current, fromDb(payload.new as DbProfile)];
-        } else if (payload.eventType === 'UPDATE') {
-          current = current.map((p) =>
-            p.uid === (payload.new as DbProfile).uid ? fromDb(payload.new as DbProfile) : p,
-          );
-        } else if (payload.eventType === 'DELETE') {
-          current = current.filter((p) => p.uid !== (payload.old as DbProfile).uid);
-        }
-        onUpdate(current);
+      () => {
+        // Re-fetch completo: nessuna race condition, sempre consistente
+        fetchAllProfiles().then(onUpdate).catch(onError);
       },
     )
     .subscribe((status) => {
-      if (status === 'CHANNEL_ERROR') onError(new Error('Realtime profiles subscription failed'));
+      if (status === 'SUBSCRIBED') {
+        // Fetch iniziale solo dopo che il canale è attivo
+        fetchAllProfiles().then(onUpdate).catch(onError);
+      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        onError(new Error(`Realtime profiles: ${status}`));
+      }
     });
 
   return () => { supabase.removeChannel(channel); };
