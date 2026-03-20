@@ -84,7 +84,11 @@ export function Sidebar({
   const now = new Date();
   const nextEvent = events
     .filter((e) => {
-      if (!myCalendarIds.has(e.calendarId)) return false;
+      // Includi: calendari DB personali + sala riunioni + eventi ICS dell'utente stesso
+      const isRelevant =
+        myCalendarIds.has(e.calendarId) ||
+        (e.isExternal === true && e.ownerId === user.id);
+      if (!isRelevant) return false;
       const dt = new Date(e.date);
       const [h, m] = e.startTime.split(':').map(Number);
       dt.setHours(h, m, 0, 0);
