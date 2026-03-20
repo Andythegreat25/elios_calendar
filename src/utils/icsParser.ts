@@ -129,12 +129,15 @@ export function parseIcs(
       const endTime = end ? end.time : start.time;
 
       // Normalizza: se endTime <= startTime ma stessa data → aggiungi 30min
-      const finalEndTime =
-        endTime > start.time || startIsAllDay
-          ? endTime
-          : `${String(+start.time.split(':')[0]).padStart(2, '0')}:${
-              String(+start.time.split(':')[1] + 30).padStart(2, '0')
-            }`;
+      // con carry corretto sui minuti (es. 09:45 + 30min = 10:15, non "09:75")
+      const finalEndTime = (() => {
+        if (endTime > start.time || startIsAllDay) return endTime;
+        const [hStr, mStr] = start.time.split(':');
+        const totalMinutes = +hStr * 60 + +mStr + 30;
+        const h = Math.floor(totalMinutes / 60) % 24;
+        const m = totalMinutes % 60;
+        return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+      })();
 
       // All-day: mostra come 00:00–23:59 così occupa la colonna intera nel grid
       const displayStart = startIsAllDay ? '00:00' : start.time;

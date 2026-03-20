@@ -6,7 +6,12 @@ import {
   createEvent,
   updateEvent,
   deleteEvent,
+  createRoomEvent,
+  updateRoomEvent,
+  deleteRoomEvent,
 } from '@/services/events.service';
+import { MEETING_ROOM_ID } from '@/services/calendars.service';
+import { isSameDay } from 'date-fns';
 
 interface UseEventsReturn {
   events: CalendarEvent[];
@@ -62,12 +67,22 @@ export function useEvents(user: User | null): UseEventsReturn {
       setIsSaving(true);
       setError(null);
       try {
-        const id = await createEvent({
+        const fullEvent: Omit<CalendarEvent, 'id'> = {
           ...eventData,
           ownerId:   user.uid,
           createdAt: new Date().toISOString(),
-        });
-        return id;
+        };
+
+        // Per la sala riunioni usa la funzione atomica con lock Firestore
+        // per prevenire double booking concorrenti tra più client.
+        if (eventData.calendarId === MEETING_ROOM_ID) {
+          const existingForDay = events.filter(
+            (e) => e.calendarId === MEETING_ROOM_ID && isSameDay(e.date, eventData.date),
+          );
+          return await createRoomEvent(fullEvent, existingForDay);
+        }
+
+        return await createEvent(fullEvent);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Errore creazione evento';
         setError(message);
@@ -76,7 +91,7 @@ export function useEvents(user: User | null): UseEventsReturn {
         setIsSaving(false);
       }
     },
-    [user],
+    [user, events],
   );
 
   const editEvent = useCallback(
@@ -87,6 +102,16 @@ export function useEvents(user: User | null): UseEventsReturn {
       setIsSaving(true);
       setError(null);
       try {
+        // Per la sala riunioni usa la funzione atomica con lock Firestore
+        const existing = events.find((e) => e.id === id);
+        if (existing?.calendarId === MEETING_ROOM_ID || updates.calendarId === MEETING_ROOM_ID) {
+          const targetDate = updates.date ?? existing?.date ?? new Date();
+          const existingForDay = events.filter(
+            (e) => e.calendarId === MEETING_ROOM_ID && isSameDay(e.date, targetDate) && e.id !== id,
+          );
+          await updateRoomEvent(id, updates, targetDate, existingForDay);
+          return;
+        }
         await updateEvent(id, updates);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Errore modifica evento';
@@ -96,22 +121,31 @@ export function useEvents(user: User | null): UseEventsReturn {
         setIsSaving(false);
       }
     },
-    [],
+    [events],
   );
 
-  const removeEvent = useCallback(async (id: string): Promise<void> => {
-    setIsSaving(true);
-    setError(null);
-    try {
-      await deleteEvent(id);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Errore eliminazione evento';
-      setError(message);
-      throw err;
-    } finally {
-      setIsSaving(false);
-    }
-  }, []);
+  const removeEvent = useCallback(
+    async (id: string): Promise<void> => {
+      setIsSaving(true);
+      setError(null);
+      try {
+        // Per la sala riunioni rimuove anche lo slot dal lock doc
+        const existing = events.find((e) => e.id === id);
+        if (existing?.calendarId === MEETING_ROOM_ID) {
+          await deleteRoomEvent(id, existing.date);
+          return;
+        }
+        await deleteEvent(id);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Errore eliminazione evento';
+        setError(message);
+        throw err;
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [events],
+  );
 
   const clearError = useCallback(() => setError(null), []);
 

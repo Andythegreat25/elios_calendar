@@ -127,5 +127,13 @@ service cloud.firestore {
       allow update: if isDocOwner() && isValidEvent(request.resource.data) && areImmutableFieldsUnchanged(['ownerId', 'createdAt']);
       allow delete: if isDocOwner();
     }
+
+    // roomLocks: documenti di lock per giorno usati dalla transazione anti-double-booking.
+    // ID formato: "room_sala-riunioni_YYYY-MM-DD"
+    // Solo utenti autenticati possono leggere/scrivere (le scritture avvengono
+    // sempre all'interno di una transazione atomica insieme all'evento).
+    match /roomLocks/{lockId} {
+      allow read, write: if isAuthenticated();
+    }
   }
 }
