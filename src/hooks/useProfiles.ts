@@ -63,12 +63,14 @@ export function useProfiles(user: User | null): UseProfilesReturn {
           if (!existing && !cancelled) {
             const defaultColors = ['#a881f3', '#2dd4bf', '#f472b6', '#60a5fa', '#fb923c'];
             const color = defaultColors[Math.floor(Math.random() * defaultColors.length)];
-            await createProfile({
+            // Non includere photoURL se null/undefined — Firestore rifiuta il valore undefined
+            const newProfile: Profile = {
               uid:         user.uid,
               displayName: user.displayName ?? user.email?.split('@')[0] ?? 'Utente',
               color,
-              photoURL:    user.photoURL ?? undefined,
-            });
+            };
+            if (user.photoURL) newProfile.photoURL = user.photoURL;
+            await createProfile(newProfile);
           }
           break; // successo — esci dal loop
         } catch (err) {
