@@ -27,10 +27,16 @@ export async function getProfile(uid: string): Promise<Profile | null> {
 /**
  * Crea o sovrascrive completamente il profilo di un utente.
  * Usato al primo accesso per inizializzare il profilo.
+ *
+ * Rimuove i campi con valore undefined prima di scrivere su Firestore,
+ * che rifiuta esplicitamente undefined come valore di campo (a differenza di null).
  */
 export async function createProfile(profile: Profile): Promise<void> {
   const ref = doc(db, PROFILES_COLLECTION, profile.uid);
-  await setDoc(ref, profile);
+  const sanitized = Object.fromEntries(
+    Object.entries(profile).filter(([, v]) => v !== undefined),
+  );
+  await setDoc(ref, sanitized);
 }
 
 /**
