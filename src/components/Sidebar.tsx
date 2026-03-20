@@ -75,10 +75,16 @@ export function Sidebar({
   const rooms = calendars.filter((c) => c.type === 'room');
   const users = calendars.filter((c) => c.type === 'user');
 
-  // Prossimo evento imminente
+  // Prossimo evento imminente — solo calendario personale + sale riunioni
+  const myCalendarIds = new Set(
+    calendars
+      .filter((c) => c.ownerId === user.id || c.type === 'room')
+      .map((c) => c.id),
+  );
   const now = new Date();
   const nextEvent = events
     .filter((e) => {
+      if (!myCalendarIds.has(e.calendarId)) return false;
       const dt = new Date(e.date);
       const [h, m] = e.startTime.split(':').map(Number);
       dt.setHours(h, m, 0, 0);
