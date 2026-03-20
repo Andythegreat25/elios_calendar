@@ -1,49 +1,52 @@
 /**
- * Servizio Firebase Storage per le foto profilo.
+ * Servizio Supabase Storage per le foto profilo.
  *
- * Le foto vengono salvate in:  profiles/{uid}/avatar
- * e i corrispondenti URL (https://firebasestorage.googleapis.com/...)
- * vengono salvati nel documento Firestore del profilo come `photoURL`.
+ * Le foto vengono salvate nel bucket "profile-photos" in:
+ *   profiles/{uid}/avatar
  *
- * Questo evita di memorizzare stringhe base64 (fino a 50 KB) direttamente
- * in Firestore, riducendo i costi di lettura e la quantità di dati scaricati
- * da tutti i client ad ogni subscription update.
+ * Il bucket è pubblico in lettura — l'URL viene salvato come `photoURL`
+ * nel documento Firestore del profilo, evitando di memorizzare base64
+ * (fino a 50 KB) che verrebbe scaricato da tutti i client ad ogni update.
  */
 
-import {
-  ref,
-  uploadBytes,
-  getDownloadURL,
-  deleteObject,
-} from 'firebase/storage';
-import { storage } from '@/firebase';
+import { supabase } from '@/lib/supabase';
+
+const BUCKET = 'profile-photos';
 
 /**
- * Carica un file immagine su Firebase Storage come foto profilo dell'utente.
- * Sovrascrive silenziosamente la foto precedente (stesso percorso).
+ * Carica la foto profilo su Supabase Storage.
+ * Sovrascrive silenziosamente il file precedente (upsert: true).
  *
- * @param uid  - UID Firestore dell'utente
- * @param file - file immagine (già ridimensionato/compresso dal chiamante)
- * @returns    - URL pubblico di download (https://...)
+ * @param uid  - UID Firebase dell'utente
+ * @param file - file già ridimensionato/compresso dal chiamante
+ * @returns    - URL pubblico permanente (con cache-buster per forzare il refresh)
  */
 export async function uploadProfilePhoto(uid: string, file: File | Blob): Promise<string> {
-  const photoRef = ref(storage, `profiles/${uid}/avatar`);
-  const snapshot = await uploadBytes(photoRef, file, {
-    contentType: 'image/jpeg',
-    cacheControl: 'public, max-age=31536000', // 1 anno — l'URL cambia ad ogni upload
-  });
-  return getDownloadURL(snapshot.ref);
+  const path = `profiles/${uid}/avatar`;
+
+  const { error } = await supabase.storage
+    .from(BUCKET)
+    .upload(path, file, {
+      contentType: 'image/jpeg',
+      upsert: true,          // sovrascrive se il file esiste già
+      cacheControl: '31536000', // 1 anno — l'URL cambia grazie al cache-buster
+    });
+
+  if (error) throw new Error(`Upload foto fallito: ${error.message}`);
+
+  const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
+
+  // Cache-buster: aggiunge il timestamp così il browser ricarica l'immagine
+  // anche se il path è lo stesso della foto precedente
+  return `${data.publicUrl}?t=${Date.now()}`;
 }
 
 /**
- * Elimina la foto profilo da Firebase Storage.
+ * Elimina la foto profilo da Supabase Storage.
  * Ignora silenziosamente l'errore se il file non esiste.
  */
 export async function deleteProfilePhoto(uid: string): Promise<void> {
-  try {
-    const photoRef = ref(storage, `profiles/${uid}/avatar`);
-    await deleteObject(photoRef);
-  } catch {
-    // Il file potrebbe non esistere (profilo senza foto o già eliminato)
-  }
+  await supabase.storage
+    .from(BUCKET)
+    .remove([`profiles/${uid}/avatar`]);
 }
