@@ -356,7 +356,9 @@ export function Sidebar({
                         </div>
                         <span className="text-xs text-zinc-300 font-medium">{cal.name}</span>
                       </label>
-                      {onColorChange && <ColorPicker color={cal.color} onChange={(c) => onColorChange(cal.id, c)} />}
+                      {onColorChange && cal.ownerId === user.id && (
+                        <ColorPicker color={cal.color} onChange={(c) => onColorChange(cal.id, c)} />
+                      )}
                       {count > 0 && (
                         <div className="w-16 h-1 bg-white/10 rounded-full overflow-hidden ml-2">
                           <div
