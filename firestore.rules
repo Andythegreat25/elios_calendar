@@ -109,9 +109,7 @@ service cloud.firestore {
 
     match /profiles/{userId} {
       allow read: if isAuthenticated();
-      allow create: if isOwner(userId) && isValidProfile(request.resource.data) && profileUidUnchanged();
-      allow update: if isOwner(userId) && isValidProfile(request.resource.data) && areImmutableFieldsUnchanged(['uid']);
-      allow delete: if isOwner(userId);
+      allow write: if isOwner(userId);
     }
 
     match /calendars/{calendarId} {
