@@ -62,6 +62,14 @@ export function CalendarPage({ user }: CalendarPageProps) {
   // Array unificato: interni + Outlook overlay
   const allEvents: CalendarEvent[] = [...events, ...externalEvents];
 
+  // Solo gli eventi dei calendari visibili (per griglia e vista mese)
+  const visibleCalIds = new Set(
+    calendars.filter((c) => c.visible !== false).map((c) => c.id),
+  );
+  const visibleEvents = allEvents.filter(
+    (e) => e.isExternal || visibleCalIds.has(e.calendarId),
+  );
+
   // ─── Notifiche browser ──────────────────────────────────────────────────────
   useNotifications(events);
 
@@ -281,7 +289,7 @@ export function CalendarPage({ user }: CalendarPageProps) {
             {view === 'month' ? (
               <MonthView
                 currentDate={currentDate}
-                events={allEvents}
+                events={visibleEvents}
                 calendars={calendars}
                 onSlotClick={handleSlotClick}
                 onEventClick={handleEventClick}
@@ -290,7 +298,7 @@ export function CalendarPage({ user }: CalendarPageProps) {
               <CalendarGrid
                 currentDate={currentDate}
                 view={view}
-                events={allEvents}
+                events={visibleEvents}
                 calendars={calendars}
                 onSlotClick={handleSlotClick}
                 onEventClick={handleEventClick}
