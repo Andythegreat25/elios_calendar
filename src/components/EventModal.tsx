@@ -53,7 +53,9 @@ export function EventModal({
       } else {
         setEndTime('09:00');
       }
-      setCalendarId(calendars[0]?.id || '');
+      // Default: primo calendario non-sala (personale), altrimenti il primo disponibile
+      const defaultCal = calendars.find((c) => c.type === 'user') ?? calendars[0];
+      setCalendarId(defaultCal?.id || '');
       setDescription('');
       setRecurrence('none');
     }

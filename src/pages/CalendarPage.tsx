@@ -309,9 +309,11 @@ export function CalendarPage({ user }: CalendarPageProps) {
         onDelete={handleDeleteEvent}
         initialDate={selectedSlot?.date}
         initialTime={selectedSlot?.time}
-        calendars={calendars}
+        calendars={calendars.filter(
+          (c) => c.type === 'room' || (c.type === 'user' && c.ownerId === user.id),
+        )}
         editEvent={editingEvent}
-        currentUserId={user.uid}
+        currentUserId={user.id}
         isSaving={isSaving}
       />
 

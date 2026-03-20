@@ -54,14 +54,11 @@ export async function updateProfile(
   uid: string,
   updates: Partial<Omit<Profile, 'uid'>>,
 ): Promise<void> {
-  const patch = toDb(updates);
-  console.log('[updateProfile] uid:', uid, 'patch:', patch);
   const { data, error } = await supabase
     .from('profiles')
-    .update(patch)
+    .update(toDb(updates))
     .eq('uid', uid)
     .select('uid');
-  console.log('[updateProfile] result:', { data, error });
   if (error) throw new Error(error.message);
   if (!data || data.length === 0) throw new Error('Profilo non trovato o permessi insufficienti');
 }
