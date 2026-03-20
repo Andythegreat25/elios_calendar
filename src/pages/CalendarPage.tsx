@@ -18,7 +18,7 @@ import { useEvents } from '@/hooks/useEvents';
 import { useAuth } from '@/hooks/useAuth';
 import { useNotifications } from '@/hooks/useNotifications';
 import { useOutlookEvents } from '@/hooks/useOutlookEvents';
-import { MEETING_ROOM_ID } from '@/services/calendars.service';
+import { MEETING_ROOM_ID, personalCalendarId } from '@/services/calendars.service';
 
 import type { CalendarEvent, SelectedSlot, ViewType } from '@/types';
 
@@ -68,8 +68,11 @@ export function CalendarPage({ user }: CalendarPageProps) {
   );
   const visibleEvents = allEvents.filter((e) => {
     if (!e.isExternal) return visibleCalIds.has(e.calendarId);
-    // Per eventi ICS: il calendario DB del proprietario è 'user_${ownerId}'
-    return visibleCalIds.has(`user_${e.ownerId}`);
+    // Per eventi ICS: mappa al calendario personale DB del proprietario
+    // Fallback visibile se il calendario non è ancora caricato
+    const ownerCalId = personalCalendarId(e.ownerId);
+    const ownerCalExists = calendars.some((c) => c.id === ownerCalId);
+    return !ownerCalExists || visibleCalIds.has(ownerCalId);
   });
 
   // ─── Notifiche browser ──────────────────────────────────────────────────────
