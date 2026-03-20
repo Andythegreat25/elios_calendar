@@ -34,7 +34,7 @@ function LoginScreen({
   isLoading, error, onClearError,
 }: LoginScreenProps) {
   const [mode, setMode] = useState<'login' | 'register'>('login');
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(() => localStorage.getItem('elios_last_email') ?? '');
   const [password, setPassword] = useState('');
   const [remember, setRemember] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
@@ -47,6 +47,8 @@ function LoginScreen({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (mode === 'login') {
+      if (remember) localStorage.setItem('elios_last_email', email);
+      else localStorage.removeItem('elios_last_email');
       await onEmailLogin(email, password, remember);
     } else {
       await onEmailRegister(email, password);
@@ -78,6 +80,8 @@ function LoginScreen({
         {/* Form email/password */}
         <form onSubmit={handleSubmit} className="space-y-3">
           <input
+            id="email"
+            name="email"
             type="email"
             placeholder="Email aziendale"
             value={email}
@@ -89,6 +93,8 @@ function LoginScreen({
 
           <div className="relative">
             <input
+              id="password"
+              name="password"
               type={showPassword ? 'text' : 'password'}
               placeholder="Password"
               value={password}
