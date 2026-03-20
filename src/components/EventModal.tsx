@@ -30,6 +30,7 @@ export function EventModal({
   const [calendarId, setCalendarId] = useState(calendars[0]?.id || '');
   const [description, setDescription] = useState('');
   const [recurrence, setRecurrence] = useState<RecurrenceType>('none');
+  const [timeError, setTimeError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -65,9 +66,26 @@ export function EventModal({
 
   const isOwner = editEvent ? editEvent.ownerId === currentUserId : true;
 
+  /** Aggiorna startTime e sposta endTime in avanti se necessario */
+  const handleStartTimeChange = (newStart: string) => {
+    setStartTime(newStart);
+    setTimeError(null);
+    if (endTime <= newStart) {
+      const [h, m] = newStart.split(':').map(Number);
+      const endH = Math.min(h + 1, 23).toString().padStart(2, '0');
+      setEndTime(`${endH}:${m.toString().padStart(2, '0')}`);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isOwner || isSaving) return;
+
+    if (startTime >= endTime) {
+      setTimeError("L'ora di fine deve essere successiva all'ora di inizio");
+      return;
+    }
+    setTimeError(null);
 
     // Parsing manuale YYYY-MM-DD → evita offset timezone di new Date("YYYY-MM-DD")
     const [year, month, day] = date.split('-').map(Number);
@@ -138,7 +156,7 @@ export function EventModal({
                 <input
                   type="time"
                   value={startTime}
-                  onChange={(e) => setStartTime(e.target.value)}
+                  onChange={(e) => handleStartTimeChange(e.target.value)}
                   disabled={!isOwner}
                   required
                   className="flex-1 bg-zinc-50/50 border border-zinc-200/60 text-zinc-900 text-sm rounded-2xl px-4 py-3 disabled:opacity-70 transition-all font-medium"
@@ -147,13 +165,18 @@ export function EventModal({
                 <input
                   type="time"
                   value={endTime}
-                  onChange={(e) => setEndTime(e.target.value)}
+                  onChange={(e) => { setEndTime(e.target.value); setTimeError(null); }}
                   disabled={!isOwner}
                   required
                   className="flex-1 bg-zinc-50/50 border border-zinc-200/60 text-zinc-900 text-sm rounded-2xl px-4 py-3 disabled:opacity-70 transition-all font-medium"
                 />
               </div>
             </div>
+
+            {/* Errore orari */}
+            {timeError && (
+              <p className="text-xs text-red-500 pl-9 -mt-2">{timeError}</p>
+            )}
 
             {/* Calendario */}
             <div className="flex items-center gap-4">

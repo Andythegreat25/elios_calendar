@@ -1,6 +1,5 @@
 import { useEffect, useRef, useCallback } from 'react';
 import type { CalendarEvent } from '@/types';
-import { isToday } from 'date-fns';
 
 /**
  * Gestisce le notifiche browser per gli eventi imminenti.
@@ -29,25 +28,25 @@ export function useNotifications(events: CalendarEvent[]) {
       if (Notification.permission !== 'granted') return;
 
       const now = new Date();
-      const nowMinutes = now.getHours() * 60 + now.getMinutes();
 
       for (const event of events) {
-        if (!isToday(event.date)) continue;
-
+        // Costruisce il datetime esatto dell'evento combinando data + ora
+        const eventDt = new Date(event.date);
         const [h, m] = event.startTime.split(':').map(Number);
-        const eventMinutes = h * 60 + m;
-        const diff = eventMinutes - nowMinutes;
+        eventDt.setHours(h, m, 0, 0);
 
-        // Notify 10 minutes before
-        if (diff >= 0 && diff <= 10) {
+        const diffMin = Math.round((eventDt.getTime() - now.getTime()) / 60_000);
+
+        // Notifica se l'evento inizia nei prossimi 10 minuti (gestisce mezzanotte correttamente)
+        if (diffMin >= 0 && diffMin <= 10) {
           const key = `${event.id}_notif`;
           if (!notifiedRef.current.has(key)) {
             notifiedRef.current.add(key);
             try {
               new Notification(`📅 ${event.title}`, {
-                body: diff === 0
+                body: diffMin === 0
                   ? `Sta iniziando ora · ${event.startTime}`
-                  : `Inizia tra ${diff} minut${diff === 1 ? 'o' : 'i'} · ${event.startTime}`,
+                  : `Inizia tra ${diffMin} minut${diffMin === 1 ? 'o' : 'i'} · ${event.startTime}`,
                 icon: '/favicon.svg',
                 tag: key,
               });

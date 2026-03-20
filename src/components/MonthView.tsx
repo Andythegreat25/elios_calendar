@@ -57,6 +57,7 @@ export function MonthView({ currentDate, events, calendars, onSlotClick, onEvent
           const isCurrentMonth = isSameMonth(day, currentDate);
           const dayEvents = expandedEvents
             .filter(e => isSameDay(e.date, day))
+            .slice()
             .sort((a, b) => a.startTime.localeCompare(b.startTime));
           const todayFlag = isToday(day);
           const visibleEvents = dayEvents.slice(0, 3);

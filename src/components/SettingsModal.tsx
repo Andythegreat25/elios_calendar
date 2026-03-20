@@ -97,12 +97,20 @@ export function SettingsModal({ isOpen, onClose, profile, onSave }: SettingsModa
     e.preventDefault();
     setIsSaving(true);
     setModalError(null);
+
+    const trimmedIcs = icsUrl.trim();
+    if (trimmedIcs && !trimmedIcs.startsWith('http://') && !trimmedIcs.startsWith('https://')) {
+      setModalError("L'URL del feed ICS deve iniziare con https://");
+      setIsSaving(false);
+      return;
+    }
+
     try {
       await onSave({
         displayName: displayName.trim(),
         color,
         photoURL: photoURL || undefined,
-        icsUrl: icsUrl.trim() || undefined,
+        icsUrl: trimmedIcs || undefined,
       });
       onClose();
     } catch (err) {
