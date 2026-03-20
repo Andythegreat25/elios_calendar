@@ -66,9 +66,11 @@ export function CalendarPage({ user }: CalendarPageProps) {
   const visibleCalIds = new Set(
     calendars.filter((c) => c.visible !== false).map((c) => c.id),
   );
-  const visibleEvents = allEvents.filter(
-    (e) => e.isExternal || visibleCalIds.has(e.calendarId),
-  );
+  const visibleEvents = allEvents.filter((e) => {
+    if (!e.isExternal) return visibleCalIds.has(e.calendarId);
+    // Per eventi ICS: il calendario DB del proprietario è 'user_${ownerId}'
+    return visibleCalIds.has(`user_${e.ownerId}`);
+  });
 
   // ─── Notifiche browser ──────────────────────────────────────────────────────
   useNotifications(events);
