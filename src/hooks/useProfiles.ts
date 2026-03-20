@@ -5,6 +5,7 @@ import {
   getProfile,
   createProfile,
   updateProfile,
+  fetchAllProfiles,
   subscribeToProfiles,
 } from '@/services/profiles.service';
 
@@ -117,6 +118,10 @@ export function useProfiles(user: User | null): UseProfilesReturn {
     setError(null);
     try {
       await updateProfile(user.id, updates);
+      // Aggiorna lo stato immediatamente senza aspettare il canale Realtime
+      const fresh = await fetchAllProfiles();
+      setProfiles(fresh);
+      setCurrentProfile(fresh.find((p) => p.uid === user.id) ?? null);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Errore salvataggio profilo';
       setError(message);
