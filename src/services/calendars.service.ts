@@ -120,6 +120,9 @@ export function subscribeToCalendars(
 ): () => void {
   const channelName = `calendars-changes-${Date.now()}`;
 
+  // Fetch immediato — non aspetta il canale Realtime
+  fetchAllCalendars().then(onUpdate).catch(onError);
+
   const channel = supabase
     .channel(channelName)
     .on(
@@ -130,9 +133,7 @@ export function subscribeToCalendars(
       },
     )
     .subscribe((status) => {
-      if (status === 'SUBSCRIBED') {
-        fetchAllCalendars().then(onUpdate).catch(onError);
-      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
         onError(new Error(`Realtime calendars: ${status}`));
       }
     });

@@ -155,6 +155,9 @@ export function subscribeToEvents(
 ): () => void {
   const channelName = `events-changes-${Date.now()}`;
 
+  // Fetch immediato — non aspetta il canale Realtime
+  fetchAllEvents().then(onUpdate).catch(onError);
+
   const channel = supabase
     .channel(channelName)
     .on(
@@ -165,9 +168,7 @@ export function subscribeToEvents(
       },
     )
     .subscribe((status) => {
-      if (status === 'SUBSCRIBED') {
-        fetchAllEvents().then(onUpdate).catch(onError);
-      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
         onError(new Error(`Realtime events: ${status}`));
       }
     });

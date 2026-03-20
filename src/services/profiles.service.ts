@@ -77,21 +77,20 @@ export function subscribeToProfiles(
 ): () => void {
   const channelName = `profiles-changes-${Date.now()}`;
 
+  // Fetch immediato — non aspetta il canale Realtime
+  fetchAllProfiles().then(onUpdate).catch(onError);
+
   const channel = supabase
     .channel(channelName)
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'profiles' },
       () => {
-        // Re-fetch completo: nessuna race condition, sempre consistente
         fetchAllProfiles().then(onUpdate).catch(onError);
       },
     )
     .subscribe((status) => {
-      if (status === 'SUBSCRIBED') {
-        // Fetch iniziale solo dopo che il canale è attivo
-        fetchAllProfiles().then(onUpdate).catch(onError);
-      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
         onError(new Error(`Realtime profiles: ${status}`));
       }
     });

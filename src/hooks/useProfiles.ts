@@ -112,7 +112,7 @@ export function useProfiles(user: User | null): UseProfilesReturn {
     };
   }, [user]);
 
-  const saveProfile = async (updates: Partial<Omit<Profile, 'uid'>>) => {
+  const saveProfile = useCallback(async (updates: Partial<Omit<Profile, 'uid'>>) => {
     if (!user) return;
     setError(null);
     try {
@@ -120,9 +120,9 @@ export function useProfiles(user: User | null): UseProfilesReturn {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Errore salvataggio profilo';
       setError(message);
-      throw err; // Ri-lancia per permettere al chiamante di gestire l'errore
+      throw err;
     }
-  };
+  }, [user]);
 
   const clearError = useCallback(() => setError(null), []);
   return { profiles, currentProfile, isLoading, saveProfile, error, clearError };
