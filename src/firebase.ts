@@ -1,6 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
 
 // Le credenziali vengono iniettate dal file .env tramite Vite.
 // Le variabili VITE_* sono esposte lato client in modo sicuro.
@@ -19,5 +20,6 @@ const app = initializeApp(firebaseConfig);
 // Usa il database ID custom se definito, altrimenti usa "(default)"
 const databaseId = import.meta.env.VITE_FIREBASE_DATABASE_ID ?? '(default)';
 
-export const db   = getFirestore(app, databaseId);
-export const auth = getAuth(app);
+export const db      = getFirestore(app, databaseId);
+export const auth    = getAuth(app);
+export const storage = getStorage(app);

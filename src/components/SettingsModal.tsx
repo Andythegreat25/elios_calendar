@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { X, Camera, Trash2, Link } from 'lucide-react';
 import type { Profile } from '@/types';
 import { Spinner } from '@/components/ui/Spinner';
+import { uploadProfilePhoto, deleteProfilePhoto } from '@/services/storage.service';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -11,10 +12,12 @@ interface SettingsModalProps {
 }
 
 /**
- * Ridimensiona un'immagine a max 200×200 e la converte in JPEG base64.
+ * Ridimensiona un'immagine a max 400×400 e la restituisce come Blob JPEG.
  * Mantiene le proporzioni originali.
+ * Il Blob viene poi caricato su Firebase Storage (non più salvato come base64
+ * in Firestore, il che riduceva le performance per tutti i client).
  */
-function resizeImageToBase64(file: File, maxSize = 200, quality = 0.82): Promise<string> {
+function resizeImageToBlob(file: File, maxSize = 400, quality = 0.85): Promise<Blob> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (ev) => {
@@ -28,7 +31,11 @@ function resizeImageToBase64(file: File, maxSize = 200, quality = 0.82): Promise
         canvas.height = h;
         const ctx = canvas.getContext('2d')!;
         ctx.drawImage(img, 0, 0, w, h);
-        resolve(canvas.toDataURL('image/jpeg', quality));
+        canvas.toBlob(
+          (blob) => (blob ? resolve(blob) : reject(new Error('Conversione immagine fallita'))),
+          'image/jpeg',
+          quality,
+        );
       };
       img.onerror = reject;
       img.src = ev.target?.result as string;
@@ -60,11 +67,15 @@ export function SettingsModal({ isOpen, onClose, profile, onSave }: SettingsModa
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file || !profile) return;
     setIsProcessingImage(true);
     try {
-      const base64 = await resizeImageToBase64(file);
-      setPhotoURL(base64);
+      // Ridimensiona localmente prima di caricare (risparmia banda)
+      const blob = await resizeImageToBlob(file);
+      // Carica su Firebase Storage — l'URL (https://...) viene salvato in Firestore
+      // invece della stringa base64, riducendo di ~200× i dati per ogni lettura profilo
+      const url = await uploadProfilePhoto(profile.uid, blob);
+      setPhotoURL(url);
     } catch {
       // ignore — utente può provare di nuovo
     } finally {
@@ -74,7 +85,11 @@ export function SettingsModal({ isOpen, onClose, profile, onSave }: SettingsModa
     }
   };
 
-  const handleRemovePhoto = () => {
+  const handleRemovePhoto = async () => {
+    if (profile) {
+      // Rimuove il file da Storage (best-effort, non blocca l'UI se fallisce)
+      deleteProfilePhoto(profile.uid).catch(() => {});
+    }
     setPhotoURL('');
     if (fileInputRef.current) fileInputRef.current.value = '';
   };

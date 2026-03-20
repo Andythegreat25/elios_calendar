@@ -62,6 +62,9 @@ export default async function handler(request: Request): Promise<Response> {
     );
   }
 
+  /** Dimensione massima accettata per un feed ICS (5 MB). */
+  const MAX_ICS_BYTES = 5 * 1024 * 1024;
+
   try {
     const upstream = await fetch(icsUrl, {
       headers: {
@@ -80,7 +83,43 @@ export default async function handler(request: Request): Promise<Response> {
       });
     }
 
-    const body = await upstream.text();
+    // Controllo veloce su Content-Length (se presente)
+    const contentLength = upstream.headers.get('Content-Length');
+    if (contentLength && parseInt(contentLength, 10) > MAX_ICS_BYTES) {
+      return new Response('ICS file too large (max 5 MB)', { status: 413 });
+    }
+
+    // Lettura in streaming con contatore di byte per gestire anche le risposte
+    // senza Content-Length (chunked transfer / server che non dichiarano la size).
+    // Senza questo limite, un server upstream potrebbe restituire un file enorme
+    // esaurendo la memoria dell'Edge Function.
+    const reader = upstream.body?.getReader();
+    if (!reader) {
+      return new Response('Empty response from upstream', { status: 502 });
+    }
+
+    const chunks: Uint8Array[] = [];
+    let totalBytes = 0;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      totalBytes += value.byteLength;
+      if (totalBytes > MAX_ICS_BYTES) {
+        await reader.cancel();
+        return new Response('ICS file too large (max 5 MB)', { status: 413 });
+      }
+      chunks.push(value);
+    }
+
+    // Assembla il body da tutti i chunk
+    const merged = new Uint8Array(totalBytes);
+    let offset = 0;
+    for (const chunk of chunks) {
+      merged.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    const body = new TextDecoder('utf-8').decode(merged);
 
     return new Response(body, {
       status: 200,
