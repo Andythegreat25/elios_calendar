@@ -68,9 +68,22 @@ export function humanizeAuthError(message: string): string {
  * Invia email di reset password tramite Supabase Auth.
  */
 export async function sendPasswordReset(email: string): Promise<void> {
+  // Usa VITE_SITE_URL (impostato nel dashboard Vercel per la produzione)
+  // così il link nell'email punta sempre all'app deployata, non a localhost.
+  const siteUrl = import.meta.env.VITE_SITE_URL ?? window.location.origin;
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: window.location.origin,
+    redirectTo: siteUrl,
   });
+  if (error) throw error;
+}
+
+/**
+ * Imposta una nuova password per l'utente corrente.
+ * Chiamato dopo che Supabase ha emesso l'evento PASSWORD_RECOVERY
+ * e l'utente ha inserito la nuova password nel form.
+ */
+export async function updatePassword(newPassword: string): Promise<void> {
+  const { error } = await supabase.auth.updateUser({ password: newPassword });
   if (error) throw error;
 }
 

@@ -208,12 +208,133 @@ function LoginScreen({
   );
 }
 
+// ─── Reset password ───────────────────────────────────────────────────────────
+
+interface ResetPasswordScreenProps {
+  onUpdatePassword: (newPassword: string) => Promise<void>;
+  isLoading: boolean;
+  error: string | null;
+  onClearError: () => void;
+}
+
+function ResetPasswordScreen({ onUpdatePassword, isLoading, error, onClearError }: ResetPasswordScreenProps) {
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
+
+  const handleChange = (setter: (v: string) => void) => (e: React.ChangeEvent<HTMLInputElement>) => {
+    onClearError();
+    setLocalError(null);
+    setter(e.target.value);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (password.length < 6) {
+      setLocalError('La password deve avere almeno 6 caratteri.');
+      return;
+    }
+    if (password !== confirm) {
+      setLocalError('Le password non coincidono.');
+      return;
+    }
+    await onUpdatePassword(password);
+  };
+
+  const displayError = localError ?? error;
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-[#FAFAFA] p-4">
+      <div className="bg-white p-10 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.06)] border border-zinc-100 max-w-sm w-full">
+
+        {/* Logo + titolo */}
+        <div className="flex flex-col items-center mb-8">
+          <Logo className="w-14 h-14 mb-5" />
+          <h1 className="text-2xl font-semibold text-zinc-900 tracking-tight">
+            Nuova password
+          </h1>
+          <p className="text-zinc-400 mt-2 text-sm text-center leading-relaxed">
+            Scegli una nuova password per il tuo account.
+          </p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-3">
+          {/* Nuova password */}
+          <div className="relative">
+            <input
+              type={showPassword ? 'text' : 'password'}
+              placeholder="Nuova password"
+              value={password}
+              onChange={handleChange(setPassword)}
+              required
+              autoComplete="new-password"
+              className="w-full px-4 py-3 pr-11 rounded-xl border border-zinc-200 bg-zinc-50 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-400 transition-all"
+            />
+            <button
+              type="button"
+              tabIndex={-1}
+              onClick={() => setShowPassword((v) => !v)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 transition-colors"
+            >
+              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
+          </div>
+
+          {/* Conferma password */}
+          <input
+            type={showPassword ? 'text' : 'password'}
+            placeholder="Conferma password"
+            value={confirm}
+            onChange={handleChange(setConfirm)}
+            required
+            autoComplete="new-password"
+            className="w-full px-4 py-3 rounded-xl border border-zinc-200 bg-zinc-50 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-400 transition-all"
+          />
+
+          {/* Errore */}
+          {displayError && (
+            <p className="text-sm text-red-500 bg-red-50 border border-red-100 rounded-xl px-4 py-2.5">
+              {displayError}
+            </p>
+          )}
+
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="w-full bg-zinc-900 text-white rounded-xl py-3 px-4 font-medium hover:bg-zinc-800 transition-all shadow-sm flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed mt-1"
+          >
+            {isLoading ? <Spinner size="sm" className="border-zinc-500 border-t-white" /> : 'Salva nuova password'}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // ─── Auth gate ────────────────────────────────────────────────────────────────
 
 function AuthGate() {
-  const { user, isAuthReady, isLoggingIn, loginEmail, registerEmail, resetPassword, error, clearError } = useAuth();
+  const {
+    user, isAuthReady, isLoggingIn, isRecoveryMode,
+    loginEmail, registerEmail, resetPassword, updatePassword,
+    error, clearError,
+  } = useAuth();
 
   if (!isAuthReady) return <LoadingScreen />;
+
+  // Modalità recovery: utente ha cliccato il link nell'email → chiediamo la nuova password
+  if (isRecoveryMode) {
+    return (
+      <ResetPasswordScreen
+        onUpdatePassword={updatePassword}
+        isLoading={isLoggingIn}
+        error={error}
+        onClearError={clearError}
+      />
+    );
+  }
+
   if (!user) return (
     <LoginScreen
       onEmailLogin={loginEmail}
