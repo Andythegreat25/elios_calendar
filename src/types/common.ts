@@ -4,7 +4,7 @@
  * - "week"  → mostra 7 giorni da lunedì
  * - "month" → mostra l'intero mese
  */
-export type ViewType = 'day' | 'week' | 'month';
+export type ViewType = 'day' | 'week' | 'month' | 'agenda' | 'analytics';
 
 /**
  * Rappresenta uno slot temporale selezionato nel grid

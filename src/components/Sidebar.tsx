@@ -1,5 +1,5 @@
 import type { CalendarEvent, Calendar, Profile } from '@/types';
-import { Plus, ChevronLeft, ChevronRight, Clock, LogOut, Settings } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight, Clock, LogOut, Settings, Moon, Sun } from 'lucide-react';
 import {
   format, addMonths, subMonths, startOfMonth, endOfMonth,
   eachDayOfInterval, isSameMonth, isSameDay, startOfWeek, endOfWeek, isAfter,
@@ -22,6 +22,8 @@ interface SidebarProps {
   user: User;
   onLogout: () => void;
   onOpenSettings: () => void;
+  isDark?: boolean;
+  onToggleDark?: () => void;
 }
 
 // ─── ColorPicker con debounce ─────────────────────────────────────────────────
@@ -63,6 +65,7 @@ export function Sidebar({
   onToggleCalendar, onColorChange, onNewEvent,
   currentDate, onDateSelect,
   user, onLogout, onOpenSettings,
+  isDark, onToggleDark,
 }: SidebarProps) {
   const [miniCalDate, setMiniCalDate] = useState(currentDate);
 
@@ -148,6 +151,18 @@ export function Sidebar({
             </div>
           </button>
           <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+            {onToggleDark && (
+              <button
+                onClick={onToggleDark}
+                className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors"
+                title={isDark ? 'Modalità chiara' : 'Modalità scura'}
+              >
+                {isDark
+                  ? <Sun className="w-4 h-4 text-zinc-400" />
+                  : <Moon className="w-4 h-4 text-zinc-400" />
+                }
+              </button>
+            )}
             <button
               onClick={onLogout}
               className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors"
