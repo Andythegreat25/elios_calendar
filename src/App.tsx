@@ -10,12 +10,52 @@ import { Eye, EyeOff } from 'lucide-react';
 
 // ─── Loading ──────────────────────────────────────────────────────────────────
 
-function LoadingScreen() {
+function LoadingScreen({ isReady }: { isReady: boolean }) {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#FAFAFA]">
-      <div className="flex flex-col items-center gap-6">
-        <Logo className="w-12 h-12" />
-        <Spinner size="md" />
+    <div
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center"
+      style={{
+        backgroundColor: '#0f0f11',
+        backgroundImage: `
+          radial-gradient(circle at 0% 20%,   rgba(168,129,243,0.25), transparent 35%),
+          radial-gradient(circle at 100% 80%,  rgba(45,212,191,0.2),  transparent 35%),
+          radial-gradient(circle at 50% 100%,  rgba(244,114,182,0.2), transparent 35%)
+        `,
+        transition: 'opacity 0.4s ease',
+        opacity: isReady ? 0 : 1,
+        pointerEvents: isReady ? 'none' : 'all',
+      }}
+    >
+      {/* Cerchi decorativi blurrati */}
+      <div className="absolute w-64 h-64 rounded-full pointer-events-none"
+           style={{ background: 'rgba(168,129,243,0.08)', filter: 'blur(60px)', top: '20%', left: '15%' }} />
+      <div className="absolute w-48 h-48 rounded-full pointer-events-none"
+           style={{ background: 'rgba(45,212,191,0.08)', filter: 'blur(50px)', bottom: '20%', right: '15%' }} />
+
+      {/* Logo */}
+      <div className="splash-logo-reveal mb-7">
+        <div className="splash-logo-spin">
+          <Logo className="w-16 h-16" />
+        </div>
+      </div>
+
+      {/* Titolo */}
+      <h1 className="splash-title text-white font-semibold text-xl tracking-tight mb-2"
+          style={{ fontFamily: 'Inter, sans-serif' }}>
+        Elios Workspace
+      </h1>
+
+      {/* Tagline */}
+      <p className="splash-tagline text-sm mb-10"
+         style={{ color: 'rgba(255,255,255,0.42)', fontFamily: 'Inter, sans-serif' }}>
+        Calendario enterprise del team
+      </p>
+
+      {/* Progress bar */}
+      <div className="splash-bar-wrap overflow-hidden rounded-full"
+           style={{ width: 220, height: 3, background: 'rgba(255,255,255,0.08)' }}>
+        <div className="splash-bar-fill h-full rounded-full"
+             style={{ background: 'linear-gradient(90deg, #a881f3, #2dd4bf)' }} />
       </div>
     </div>
   );
@@ -342,40 +382,47 @@ function AuthGate() {
     resetTimers();
   }, [resetTimers]);
 
-  if (!isAuthReady) return <LoadingScreen />;
-
-  // Modalità recovery: utente ha cliccato il link nell'email → chiediamo la nuova password
-  if (isRecoveryMode) {
-    return (
-      <ResetPasswordScreen
-        onUpdatePassword={updatePassword}
-        isLoading={isLoggingIn}
-        error={error}
-        onClearError={clearError}
-      />
-    );
-  }
-
-  if (!user) return (
-    <LoginScreen
-      onEmailLogin={loginEmail}
-      onEmailRegister={registerEmail}
-      onResetPassword={resetPassword}
-      isLoading={isLoggingIn}
-      error={error}
-      onClearError={clearError}
-    />
-  );
-
   return (
     <>
-      <CalendarPage user={user} />
-      {showTimeoutWarning && (
-        <SessionTimeoutModal
-          onStay={handleStay}
-          onLogout={handleAutoLogout}
-        />
-      )}
+      {/* Splash screen premium: overlay che svanisce quando l'auth è pronta */}
+      <LoadingScreen isReady={isAuthReady} />
+
+      {/* Contenuto reale — visibile solo dopo che l'auth è pronta */}
+      {isAuthReady && (() => {
+        if (isRecoveryMode) {
+          return (
+            <ResetPasswordScreen
+              onUpdatePassword={updatePassword}
+              isLoading={isLoggingIn}
+              error={error}
+              onClearError={clearError}
+            />
+          );
+        }
+        if (!user) {
+          return (
+            <LoginScreen
+              onEmailLogin={loginEmail}
+              onEmailRegister={registerEmail}
+              onResetPassword={resetPassword}
+              isLoading={isLoggingIn}
+              error={error}
+              onClearError={clearError}
+            />
+          );
+        }
+        return (
+          <>
+            <CalendarPage user={user} />
+            {showTimeoutWarning && (
+              <SessionTimeoutModal
+                onStay={handleStay}
+                onLogout={handleAutoLogout}
+              />
+            )}
+          </>
+        );
+      })()}
     </>
   );
 }
