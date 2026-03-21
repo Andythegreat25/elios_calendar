@@ -3,13 +3,6 @@
   "outputDirectory": "dist",
   "framework": "vite",
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/$1" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
-  ],
-  "crons": [
-    {
-      "path": "/api/send-reminders",
-      "schedule": "*/15 * * * *"
-    }
   ]
 }
