@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { CalendarPage } from './pages/CalendarPage';
-import { Logo } from './components/Logo';
+import { Logo, LogoFull } from './components/Logo';
 import { Spinner } from './components/ui/Spinner';
 import { useAuth } from './hooks/useAuth';
 import { useSessionTimeout } from './hooks/useSessionTimeout';
@@ -32,22 +32,16 @@ function LoadingScreen({ isReady }: { isReady: boolean }) {
       <div className="absolute w-48 h-48 rounded-full pointer-events-none"
            style={{ background: 'rgba(45,212,191,0.08)', filter: 'blur(50px)', bottom: '20%', right: '15%' }} />
 
-      {/* Logo */}
-      <div className="splash-logo-reveal mb-7">
+      {/* Logo completo con animazione */}
+      <div className="splash-logo-reveal mb-3">
         <div className="splash-logo-spin">
-          <Logo className="w-16 h-16" />
+          <LogoFull variant="light" />
         </div>
       </div>
 
-      {/* Titolo */}
-      <h1 className="splash-title text-white font-semibold text-xl tracking-tight mb-2"
-          style={{ fontFamily: 'Inter, sans-serif' }}>
-        Elios Workspace
-      </h1>
-
       {/* Tagline */}
-      <p className="splash-tagline text-sm mb-10"
-         style={{ color: 'rgba(255,255,255,0.42)', fontFamily: 'Inter, sans-serif' }}>
+      <p className="splash-tagline text-sm mb-10 mt-4"
+         style={{ color: 'rgba(255,255,255,0.38)', fontFamily: 'Inter, sans-serif', letterSpacing: '0.06em' }}>
         Calendario enterprise del team
       </p>
 
