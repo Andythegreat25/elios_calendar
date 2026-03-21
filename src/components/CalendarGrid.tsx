@@ -84,7 +84,10 @@ export function CalendarGrid({
               const isHour = time.endsWith(':00');
               const [hourStr] = time.split(':');
               return (
-                <div key={i} className="h-20 border-b border-zinc-200/50 relative">
+                <div key={i} className={cn(
+                  'h-20 border-b relative',
+                  time.endsWith(':00') ? 'border-zinc-300' : 'border-zinc-200/50',
+                )}>
                   {isHour && (
                     <span className="absolute -top-2.5 right-4 text-[11px] text-zinc-400 font-medium">
                       {parseInt(hourStr, 10)}:00
@@ -102,8 +105,11 @@ export function CalendarGrid({
           >
             {/* Linee orizzontali */}
             <div className="absolute inset-0 pointer-events-none">
-              {timeSlots.map((_, i) => (
-                <div key={i} className="h-20 border-b border-zinc-100/50 w-full" />
+              {timeSlots.map((time, i) => (
+                <div key={i} className={cn(
+                  'h-20 border-b w-full',
+                  time.endsWith(':00') ? 'border-zinc-200' : 'border-zinc-100',
+                )} />
               ))}
             </div>
 
