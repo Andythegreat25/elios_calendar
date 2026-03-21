@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { CalendarPage } from './pages/CalendarPage';
 import { Logo } from './components/Logo';
 import { Spinner } from './components/ui/Spinner';
 import { useAuth } from './hooks/useAuth';
+import { useSessionTimeout } from './hooks/useSessionTimeout';
+import { SessionTimeoutModal } from './components/SessionTimeoutModal';
 import { Eye, EyeOff } from 'lucide-react';
 
 // ─── Loading ──────────────────────────────────────────────────────────────────
@@ -318,8 +320,27 @@ function AuthGate() {
   const {
     user, isAuthReady, isLoggingIn, isRecoveryMode,
     loginEmail, registerEmail, resetPassword, updatePassword,
-    error, clearError,
+    logoutUser, error, clearError,
   } = useAuth();
+
+  const [showTimeoutWarning, setShowTimeoutWarning] = useState(false);
+
+  const handleWarn   = useCallback(() => setShowTimeoutWarning(true),  []);
+  const handleAutoLogout = useCallback(async () => {
+    setShowTimeoutWarning(false);
+    await logoutUser();
+  }, [logoutUser]);
+
+  const { resetTimers } = useSessionTimeout({
+    isActive: !!user && !isRecoveryMode,
+    onWarn:   handleWarn,
+    onLogout: handleAutoLogout,
+  });
+
+  const handleStay = useCallback(() => {
+    setShowTimeoutWarning(false);
+    resetTimers();
+  }, [resetTimers]);
 
   if (!isAuthReady) return <LoadingScreen />;
 
@@ -345,7 +366,18 @@ function AuthGate() {
       onClearError={clearError}
     />
   );
-  return <CalendarPage user={user} />;
+
+  return (
+    <>
+      <CalendarPage user={user} />
+      {showTimeoutWarning && (
+        <SessionTimeoutModal
+          onStay={handleStay}
+          onLogout={handleAutoLogout}
+        />
+      )}
+    </>
+  );
 }
 
 export default function App() {
