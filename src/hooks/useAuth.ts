@@ -34,9 +34,23 @@ export function useAuth(): UseAuthReturn {
   const [error, setError]             = useState<string | null>(null);
 
   useEffect(() => {
-    // Recupera la sessione esistente al mount
-    supabase.auth.getSession().then(({ data }) => {
-      setUser(data.session?.user ?? null);
+    // Recupera la sessione esistente al mount e la valida server-side.
+    // getSession() legge solo dallo storage locale (il JWT può essere ancora
+    // "valido" anche se l'utente è stato cancellato dal dashboard Supabase).
+    // getUser() fa una chiamata di rete reale: se l'utente non esiste più
+    // riceve un errore e svuotiamo la sessione locale.
+    supabase.auth.getSession().then(async ({ data }) => {
+      if (data.session) {
+        const { error } = await supabase.auth.getUser();
+        if (error) {
+          await supabase.auth.signOut();
+          setUser(null);
+        } else {
+          setUser(data.session.user);
+        }
+      } else {
+        setUser(null);
+      }
       setIsAuthReady(true);
     });
 
