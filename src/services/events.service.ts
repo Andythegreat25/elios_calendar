@@ -143,7 +143,7 @@ export async function deleteRoomEvent(id: string): Promise<void> {
 
 // ─── Real-time subscription ───────────────────────────────────────────────────
 
-async function fetchAllEvents(): Promise<CalendarEvent[]> {
+export async function fetchAllEvents(): Promise<CalendarEvent[]> {
   const { data, error } = await supabase.from('events').select('*');
   if (error) throw new Error(error.message);
   return (data as DbEvent[]).map(fromDb);
