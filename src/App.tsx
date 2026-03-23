@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { CalendarPage } from './pages/CalendarPage';
 import { Logo, LogoFull } from './components/Logo';
@@ -358,6 +358,12 @@ function AuthGate() {
   } = useAuth();
 
   const [showTimeoutWarning, setShowTimeoutWarning] = useState(false);
+  const [minTimeElapsed, setMinTimeElapsed] = useState(false);
+
+  useEffect(() => {
+    const t = setTimeout(() => setMinTimeElapsed(true), 2000);
+    return () => clearTimeout(t);
+  }, []);
 
   const handleWarn   = useCallback(() => setShowTimeoutWarning(true),  []);
   const handleAutoLogout = useCallback(async () => {
@@ -376,13 +382,15 @@ function AuthGate() {
     resetTimers();
   }, [resetTimers]);
 
+  const splashDone = isAuthReady && minTimeElapsed;
+
   return (
     <>
-      {/* Splash screen premium: overlay che svanisce quando l'auth è pronta */}
-      <LoadingScreen isReady={isAuthReady} />
+      {/* Splash screen premium: overlay che svanisce quando auth è pronta E timer minimo trascorso */}
+      <LoadingScreen isReady={splashDone} />
 
-      {/* Contenuto reale — visibile solo dopo che l'auth è pronta */}
-      {isAuthReady && (() => {
+      {/* Contenuto reale — visibile solo dopo che la splash è terminata */}
+      {splashDone && (() => {
         if (isRecoveryMode) {
           return (
             <ResetPasswordScreen
