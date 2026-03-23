@@ -3,6 +3,7 @@ import type { User } from '@supabase/supabase-js';
 import type { CalendarEvent } from '@/types';
 import {
   subscribeToEvents,
+  fetchAllEvents,
   createEvent,
   updateEvent,
   deleteEvent,
@@ -74,11 +75,15 @@ export function useEvents(user: User | null): UseEventsReturn {
 
         // Per la sala riunioni usa la RPC PostgreSQL con advisory lock
         // per prevenire double booking concorrenti tra più client.
+        let newId: string;
         if (eventData.calendarId === MEETING_ROOM_ID) {
-          return await createRoomEvent(fullEvent);
+          newId = await createRoomEvent(fullEvent);
+        } else {
+          newId = await createEvent(fullEvent);
         }
-
-        return await createEvent(fullEvent);
+        // Aggiorna lo stato immediatamente senza aspettare il canale Realtime
+        setEvents(await fetchAllEvents());
+        return newId;
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Errore creazione evento';
         setError(message);
@@ -103,9 +108,11 @@ export function useEvents(user: User | null): UseEventsReturn {
         if (existing?.calendarId === MEETING_ROOM_ID || updates.calendarId === MEETING_ROOM_ID) {
           const targetDate = updates.date ?? existing?.date ?? new Date();
           await updateRoomEvent(id, updates, targetDate);
-          return;
+        } else {
+          await updateEvent(id, updates);
         }
-        await updateEvent(id, updates);
+        // Aggiorna lo stato immediatamente senza aspettare il canale Realtime
+        setEvents(await fetchAllEvents());
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Errore modifica evento';
         setError(message);
@@ -125,9 +132,11 @@ export function useEvents(user: User | null): UseEventsReturn {
         const existing = events.find((e) => e.id === id);
         if (existing?.calendarId === MEETING_ROOM_ID) {
           await deleteRoomEvent(id);
-          return;
+        } else {
+          await deleteEvent(id);
         }
-        await deleteEvent(id);
+        // Aggiorna lo stato immediatamente senza aspettare il canale Realtime
+        setEvents(await fetchAllEvents());
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Errore eliminazione evento';
         setError(message);
