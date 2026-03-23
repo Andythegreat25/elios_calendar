@@ -53,8 +53,12 @@ export function humanizeAuthError(message: string): string {
     return 'Controlla la tua email e conferma la registrazione.';
   if (m.includes('user already registered') || m.includes('already been registered'))
     return 'Email già in uso da un altro account.';
-  if (m.includes('password'))
+  if (m.includes('weak_password') || (m.includes('password') && (m.includes('contain') || m.includes('of each') || m.includes('weak'))))
+    return 'Password troppo debole: usa almeno una maiuscola, una minuscola e un numero.';
+  if (m.includes('password') && (m.includes('least') || m.includes('short') || m.includes('length') || /password.{0,30}\d/.test(m)))
     return 'La password deve avere almeno 6 caratteri.';
+  if (m.includes('password'))
+    return 'Password non valida. Controlla i requisiti e riprova.';
   if (m.includes('rate limit') || m.includes('too many'))
     return 'Troppi tentativi. Riprova tra qualche minuto.';
   if (m.includes('network') || m.includes('fetch'))
