@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Camera, Trash2, Link } from 'lucide-react';
+import { X, Camera, Trash2, Link, Eye, EyeOff } from 'lucide-react';
 import type { Profile } from '@/types';
 import { Spinner } from '@/components/ui/Spinner';
 import { uploadProfilePhoto, deleteProfilePhoto } from '@/services/storage.service';
@@ -9,6 +9,7 @@ interface SettingsModalProps {
   onClose: () => void;
   profile: Profile | null;
   onSave: (updates: Partial<Omit<Profile, 'uid'>>) => Promise<void>;
+  onUpdatePassword?: (newPassword: string) => Promise<void>;
 }
 
 /**
@@ -45,7 +46,7 @@ function resizeImageToBlob(file: File, maxSize = 400, quality = 0.85): Promise<B
   });
 }
 
-export function SettingsModal({ isOpen, onClose, profile, onSave }: SettingsModalProps) {
+export function SettingsModal({ isOpen, onClose, profile, onSave, onUpdatePassword }: SettingsModalProps) {
   const [displayName, setDisplayName] = useState('');
   const [color, setColor] = useState('#a881f3');
   const [photoURL, setPhotoURL] = useState('');
@@ -57,6 +58,13 @@ export function SettingsModal({ isOpen, onClose, profile, onSave }: SettingsModa
   const [icsTestResult, setIcsTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = useState(false);
+
   useEffect(() => {
     if (isOpen && profile) {
       setDisplayName(profile.displayName ?? '');
@@ -64,6 +72,10 @@ export function SettingsModal({ isOpen, onClose, profile, onSave }: SettingsModa
       setPhotoURL(profile.photoURL ?? '');
       setIcsUrl(profile.icsUrl ?? '');
       setModalError(null);
+      setNewPassword('');
+      setConfirmPassword('');
+      setPasswordError(null);
+      setPasswordSuccess(false);
     }
   }, [isOpen, profile]);
 
@@ -140,6 +152,30 @@ export function SettingsModal({ isOpen, onClose, profile, onSave }: SettingsModa
     }
   };
 
+  const handleUpdatePassword = async () => {
+    setPasswordError(null);
+    setPasswordSuccess(false);
+    if (newPassword.length < 6) {
+      setPasswordError('La password deve avere almeno 6 caratteri.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError('Le password non coincidono.');
+      return;
+    }
+    setIsUpdatingPassword(true);
+    try {
+      await onUpdatePassword!(newPassword);
+      setPasswordSuccess(true);
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (err) {
+      setPasswordError(err instanceof Error ? err.message : 'Errore aggiornamento password');
+    } finally {
+      setIsUpdatingPassword(false);
+    }
+  };
+
   const initials = displayName?.charAt(0)?.toUpperCase() || 'U';
 
   return (
@@ -148,7 +184,7 @@ export function SettingsModal({ isOpen, onClose, profile, onSave }: SettingsModa
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-[2rem] w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+        className="bg-white rounded-[2rem] w-full max-w-md shadow-2xl overflow-y-auto max-h-[90vh] animate-in fade-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -314,6 +350,73 @@ export function SettingsModal({ isOpen, onClose, profile, onSave }: SettingsModa
             )}
           </button>
         </form>
+
+        {/* Sezione cambio password — separata dal form profilo */}
+        {onUpdatePassword && (
+          <div className="px-6 pb-6">
+            <div className="border-t border-zinc-100 pt-6 space-y-4">
+              <h3 className="text-sm font-semibold text-zinc-700">Cambia Password</h3>
+
+              <div className="space-y-3">
+                <div className="relative">
+                  <input
+                    type={showNewPassword ? 'text' : 'password'}
+                    placeholder="Nuova password"
+                    value={newPassword}
+                    onChange={(e) => { setNewPassword(e.target.value); setPasswordError(null); setPasswordSuccess(false); }}
+                    autoComplete="new-password"
+                    className="w-full px-4 py-2.5 pr-11 bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-900 transition-all text-sm"
+                  />
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    onClick={() => setShowNewPassword((v) => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 transition-colors"
+                  >
+                    {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+
+                <input
+                  type={showNewPassword ? 'text' : 'password'}
+                  placeholder="Conferma nuova password"
+                  value={confirmPassword}
+                  onChange={(e) => { setConfirmPassword(e.target.value); setPasswordError(null); setPasswordSuccess(false); }}
+                  autoComplete="new-password"
+                  className="w-full px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-900 transition-all text-sm"
+                />
+              </div>
+
+              {passwordError && (
+                <p className="text-sm text-red-500 bg-red-50 border border-red-100 rounded-xl px-4 py-2.5">
+                  {passwordError}
+                </p>
+              )}
+              {passwordSuccess && (
+                <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-xl px-4 py-2.5">
+                  Password aggiornata con successo.
+                </p>
+              )}
+
+              <button
+                type="button"
+                onClick={handleUpdatePassword}
+                disabled={isUpdatingPassword || !newPassword || !confirmPassword}
+                className="w-full bg-zinc-100 hover:bg-zinc-200 text-zinc-900 px-4 py-2.5 rounded-xl font-medium transition-all disabled:opacity-50 flex items-center justify-center gap-2 text-sm"
+              >
+                {isUpdatingPassword ? (
+                  <>
+                    <Spinner size="sm" className="border-zinc-300 border-t-zinc-700" />
+                    Aggiornamento...
+                  </>
+                ) : (
+                  'Aggiorna Password'
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   );

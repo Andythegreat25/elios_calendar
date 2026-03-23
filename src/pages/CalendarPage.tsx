@@ -44,7 +44,7 @@ export function CalendarPage({ user }: CalendarPageProps) {
   const { isDark, toggle: toggleDark } = useDarkMode();
 
   // ─── Auth ──────────────────────────────────────────────────────────────────
-  const { logoutUser } = useAuth();
+  const { logoutUser, updatePassword } = useAuth();
 
   // ─── Dati server ───────────────────────────────────────────────────────────
   const { profiles, currentProfile, saveProfile, error: profileError, clearError: clearProfileError } = useProfiles(user);
@@ -384,6 +384,7 @@ export function CalendarPage({ user }: CalendarPageProps) {
         onClose={() => setIsSettingsOpen(false)}
         profile={currentProfile}
         onSave={handleSaveProfile}
+        onUpdatePassword={updatePassword}
       />
 
       <SearchModal
