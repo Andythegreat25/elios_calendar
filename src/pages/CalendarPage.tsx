@@ -65,6 +65,7 @@ export function CalendarPage({ user }: CalendarPageProps) {
     createdAt: '',
     isExternal: true,
     ownerColor: profiles.find((p) => p.uid === e.ownerUid)?.color ?? '#94a3b8',
+    ownerName: profiles.find((p) => p.uid === e.ownerUid)?.displayName,
   }));
   // Array unificato: interni + Outlook overlay
   const allEvents: CalendarEvent[] = [...events, ...externalEvents];

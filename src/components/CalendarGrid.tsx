@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link2 } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import {
   DndContext,
@@ -296,9 +297,15 @@ export function CalendarGrid({
                               borderLeft: `3px solid ${color}`,
                             }}
                           >
-                            <div className="font-medium truncate italic text-zinc-500">
-                              {event.title}
+                            <div className="flex items-center gap-1 font-medium italic text-zinc-500 overflow-hidden">
+                              <Link2 className="w-3 h-3 shrink-0" style={{ color }} />
+                              <span className="truncate">{event.title}</span>
                             </div>
+                            {event.ownerName && height > 34 && (
+                              <div className="text-[10px] truncate mt-0.5 italic" style={{ color: `${color}bb` }}>
+                                {event.ownerName}
+                              </div>
+                            )}
                           </div>
                         );
                       }

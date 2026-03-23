@@ -1,7 +1,7 @@
 import type { CalendarEvent, Calendar } from '@/types';
 import { format, isToday, isTomorrow, isThisWeek, isFuture, isSameDay, startOfDay } from 'date-fns';
 import { it } from 'date-fns/locale';
-import { Clock, Calendar as CalendarIcon } from 'lucide-react';
+import { Clock, Calendar as CalendarIcon, Link2 } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { expandEventsForRange } from '@/utils/recurrence';
 import { addDays } from 'date-fns';
@@ -128,10 +128,11 @@ export function AgendaView({ events, calendars, onEventClick }: AgendaViewProps)
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <div className={cn(
-                        'text-sm font-medium truncate',
+                        'text-sm font-medium flex items-center gap-1 overflow-hidden',
                         event.isExternal ? 'italic text-zinc-500 dark:text-zinc-400' : 'text-zinc-900 dark:text-zinc-100',
                       )}>
-                        {event.title}
+                        {event.isExternal && <Link2 className="w-3.5 h-3.5 shrink-0" style={{ color }} />}
+                        <span className="truncate">{event.title}</span>
                       </div>
                       {event.description && (
                         <div className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 truncate">
@@ -148,7 +149,7 @@ export function AgendaView({ events, calendars, onEventClick }: AgendaViewProps)
                         <div className="flex items-center gap-1 text-[10px] text-zinc-400 dark:text-zinc-500">
                           <CalendarIcon className="w-2.5 h-2.5" />
                           <span className="truncate max-w-[100px]">
-                            {calendar?.name ?? 'Esterno'}
+                            {calendar?.name ?? event.ownerName ?? 'Esterno'}
                           </span>
                         </div>
                       )}

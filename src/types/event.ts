@@ -36,6 +36,11 @@ export interface CalendarEvent {
    * corrispondente in Firestore. Usato da CalendarGrid e MonthView.
    */
   ownerColor?: string;
+  /**
+   * Nome display del proprietario per eventi ICS esterni.
+   * Usato per mostrare "di chi è" l'evento al volo.
+   */
+  ownerName?: string;
 }
 
 /**

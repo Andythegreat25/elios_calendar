@@ -1,4 +1,5 @@
 import type { CalendarEvent, Calendar } from '@/types';
+import { Link2 } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addDays, isSameMonth, isSameDay, isToday } from 'date-fns';
 import { it } from 'date-fns/locale';
 import { cn } from '@/utils/cn';
@@ -101,14 +102,15 @@ export function MonthView({ currentDate, events, calendars, onSlotClick, onEvent
                       <div
                         key={event.id}
                         title={`${event.title}\n${event.startTime}–${event.endTime}`}
-                        className="px-2 py-0.5 rounded-lg text-[11px] truncate cursor-default italic opacity-70"
+                        className="px-2 py-0.5 rounded-lg text-[11px] cursor-default italic opacity-70 flex items-center gap-0.5 overflow-hidden"
                         style={{
                           background: `repeating-linear-gradient(45deg, ${color}18, ${color}18 3px, transparent 3px, transparent 6px)`,
                           color: '#6b7280',
                           borderLeft: `3px solid ${color}80`,
                         }}
                       >
-                        {event.title}
+                        <Link2 className="w-2.5 h-2.5 shrink-0" style={{ color }} />
+                        <span className="truncate">{event.title}</span>
                       </div>
                     );
                   }
