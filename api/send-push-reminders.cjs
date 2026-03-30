@@ -1,46 +1,25 @@
-/* eslint-disable @typescript-eslint/no-require-imports */
 /**
- * Vercel Serverless Function — CommonJS (api/package.json: { "type": "commonjs" })
+ * Vercel Serverless Function — CJS puro (.cjs = sempre CommonJS)
  * Invia push reminder per eventi imminenti.
  */
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const webpush = require('web-push') as typeof import('web-push');
+const webpush = require('web-push');
 
 const HALF_WINDOW_MS = 2.5 * 60_000;
 
-function pad2(n: number) {
+function pad2(n) {
   return String(n).padStart(2, '0');
 }
 
-function formatTime(date: Date): string {
+function formatTime(date) {
   return `${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
 }
 
-function formatDate(date: Date): string {
+function formatDate(date) {
   return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
 }
 
-type PushSubscriptionRow = {
-  user_id: string;
-  endpoint: string;
-  subscription: Parameters<typeof webpush.sendNotification>[0];
-};
-
-type ProfileRow = {
-  uid: string;
-  reminder_minutes: number | null;
-};
-
-type EventRow = {
-  id: string;
-  title: string;
-  start_time: string;
-  description: string | null;
-  owner_id: string;
-};
-
-async function handler(req: Request): Promise<Response> {
+module.exports = async function handler(req) {
   // Auth
   const authHeader = req.headers.get('authorization');
   const cronSecret = process.env.CRON_SECRET;
@@ -52,7 +31,7 @@ async function handler(req: Request): Promise<Response> {
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const vapidPublicKey  = process.env.VAPID_PUBLIC_KEY;
   const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
-  const vapidSubject    = process.env.VAPID_SUBJECT ?? 'mailto:noreply@eliosapp.it';
+  const vapidSubject    = process.env.VAPID_SUBJECT || 'mailto:noreply@eliosapp.it';
 
   if (!supabaseUrl || !serviceRoleKey) {
     return new Response('SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY mancanti', { status: 500 });
@@ -77,7 +56,7 @@ async function handler(req: Request): Promise<Response> {
   if (!subsRes.ok) {
     return new Response(`Supabase push_subscriptions query fallita: ${subsRes.status}`, { status: 502 });
   }
-  const subscriptions: PushSubscriptionRow[] = await subsRes.json();
+  const subscriptions = await subsRes.json();
   if (!subscriptions.length) {
     return new Response(JSON.stringify({ sent: 0, message: 'Nessuna subscription attiva' }), {
       status: 200,
@@ -85,7 +64,7 @@ async function handler(req: Request): Promise<Response> {
     });
   }
 
-  // 2. Carica profili utenti
+  // 2. Carica profili utenti con reminder attivo
   const userIds = [...new Set(subscriptions.map((s) => s.user_id))];
   const profilesRes = await fetch(
     `${supabaseUrl}/rest/v1/profiles?select=uid,reminder_minutes&uid=in.(${userIds.join(',')})`,
@@ -94,9 +73,9 @@ async function handler(req: Request): Promise<Response> {
   if (!profilesRes.ok) {
     return new Response(`Supabase profiles query fallita: ${profilesRes.status}`, { status: 502 });
   }
-  const profiles: ProfileRow[] = await profilesRes.json();
+  const profiles = await profilesRes.json();
 
-  const reminderMap = new Map<string, number>();
+  const reminderMap = new Map();
   for (const p of profiles) {
     if (p.reminder_minutes != null && p.reminder_minutes > 0) {
       reminderMap.set(p.uid, p.reminder_minutes);
@@ -113,7 +92,7 @@ async function handler(req: Request): Promise<Response> {
   const now      = new Date();
   const todayStr = formatDate(now);
   let sent       = 0;
-  const errors: string[] = [];
+  const errors   = [];
 
   // 3. Per ogni utente cerca eventi imminenti e invia push
   for (const [userId, reminderMinutes] of reminderMap) {
@@ -130,7 +109,7 @@ async function handler(req: Request): Promise<Response> {
     );
     if (!eventsRes.ok) continue;
 
-    const events: EventRow[] = await eventsRes.json();
+    const events = await eventsRes.json();
     if (!events.length) continue;
 
     const userSubs = subscriptions.filter((s) => s.user_id === userId);
@@ -146,8 +125,8 @@ async function handler(req: Request): Promise<Response> {
         try {
           await webpush.sendNotification(sub.subscription, payload);
           sent++;
-        } catch (err: unknown) {
-          if (err && typeof err === 'object' && 'statusCode' in err && (err as { statusCode: number }).statusCode === 410) {
+        } catch (err) {
+          if (err && err.statusCode === 410) {
             await fetch(
               `${supabaseUrl}/rest/v1/push_subscriptions?endpoint=eq.${encodeURIComponent(sub.endpoint)}`,
               { method: 'DELETE', headers },
@@ -164,6 +143,4 @@ async function handler(req: Request): Promise<Response> {
     status: 200,
     headers: { 'Content-Type': 'application/json' },
   });
-}
-
-module.exports = handler;
+};
