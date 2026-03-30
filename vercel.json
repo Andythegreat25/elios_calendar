@@ -2,6 +2,11 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "framework": "vite",
+  "functions": {
+    "api/send-push-reminders.ts": {
+      "includeFiles": "node_modules/{web-push,asn1.js,bn.js,debug,ecdsa-sig-formatter,http_ece,https-proxy-agent,inherits,jwa,jws,minimist,ms,safe-buffer,safer-buffer}/**"
+    }
+  },
   "rewrites": [
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
