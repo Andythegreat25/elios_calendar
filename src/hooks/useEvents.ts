@@ -12,6 +12,7 @@ import {
   deleteRoomEvent,
 } from '@/services/events.service';
 import { MEETING_ROOM_ID } from '@/services/calendars.service';
+import { getRealId } from '@/utils/recurrence';
 
 interface UseEventsReturn {
   events: CalendarEvent[];
@@ -102,14 +103,15 @@ export function useEvents(user: User | null): UseEventsReturn {
     ): Promise<void> => {
       setIsSaving(true);
       setError(null);
+      const dbId = getRealId(id);
       try {
         // Per la sala riunioni usa la RPC PostgreSQL con advisory lock
-        const existing = events.find((e) => e.id === id);
+        const existing = events.find((e) => e.id === dbId);
         if (existing?.calendarId === MEETING_ROOM_ID || updates.calendarId === MEETING_ROOM_ID) {
           const targetDate = updates.date ?? existing?.date ?? new Date();
-          await updateRoomEvent(id, updates, targetDate);
+          await updateRoomEvent(dbId, updates, targetDate);
         } else {
-          await updateEvent(id, updates);
+          await updateEvent(dbId, updates);
         }
         // Aggiorna lo stato immediatamente senza aspettare il canale Realtime
         setEvents(await fetchAllEvents());
@@ -128,12 +130,13 @@ export function useEvents(user: User | null): UseEventsReturn {
     async (id: string): Promise<void> => {
       setIsSaving(true);
       setError(null);
+      const dbId = getRealId(id);
       try {
-        const existing = events.find((e) => e.id === id);
+        const existing = events.find((e) => e.id === dbId);
         if (existing?.calendarId === MEETING_ROOM_ID) {
-          await deleteRoomEvent(id);
+          await deleteRoomEvent(dbId);
         } else {
-          await deleteEvent(id);
+          await deleteEvent(dbId);
         }
         // Aggiorna lo stato immediatamente senza aspettare il canale Realtime
         setEvents(await fetchAllEvents());

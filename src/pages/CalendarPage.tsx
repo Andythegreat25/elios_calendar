@@ -20,9 +20,11 @@ import { useCalendars } from '@/hooks/useCalendars';
 import { useEvents } from '@/hooks/useEvents';
 import { useAuth } from '@/hooks/useAuth';
 import { useNotifications } from '@/hooks/useNotifications';
+import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { useOutlookEvents } from '@/hooks/useOutlookEvents';
 import { useDarkMode } from '@/hooks/useDarkMode';
 import { MEETING_ROOM_ID, personalCalendarId } from '@/services/calendars.service';
+import { getRealId } from '@/utils/recurrence';
 
 import type { CalendarEvent, SelectedSlot, ViewType } from '@/types';
 
@@ -83,8 +85,9 @@ export function CalendarPage({ user }: CalendarPageProps) {
     return !ownerCalExists || visibleCalIds.has(ownerCalId);
   });
 
-  // ─── Notifiche browser ──────────────────────────────────────────────────────
+  // ─── Notifiche browser (tab aperta) + Web Push (tab chiusa) ─────────────────
   useNotifications(events);
+  const push = usePushNotifications();
 
   // ─── Stato UI locale ───────────────────────────────────────────────────────
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -190,23 +193,24 @@ export function CalendarPage({ user }: CalendarPageProps) {
 
   const handleUpdateEvent = useCallback(
     async (id: string, eventData: Partial<Omit<CalendarEvent, 'id' | 'ownerId' | 'createdAt'>>) => {
+      const realId = getRealId(id);
       // Overlap check solo se si sta spostando/ridimensionando su una sala
       if (eventData.calendarId !== undefined || eventData.date !== undefined || eventData.startTime !== undefined || eventData.endTime !== undefined) {
         // Recupera i valori attuali dell'evento in caso di aggiornamento parziale
-        const existing = events.find((e) => e.id === id);
+        const existing = events.find((e) => e.id === realId);
         if (existing) {
           const targetCalId  = eventData.calendarId ?? existing.calendarId;
           const targetDate   = eventData.date       ?? existing.date;
           const targetStart  = eventData.startTime  ?? existing.startTime;
           const targetEnd    = eventData.endTime    ?? existing.endTime;
-          const conflict = checkRoomOverlap(targetCalId, targetDate, targetStart, targetEnd, id);
+          const conflict = checkRoomOverlap(targetCalId, targetDate, targetStart, targetEnd, realId);
           if (conflict) {
             setOverlapError(`Sala già occupata: "${conflict.title}" (${conflict.startTime}–${conflict.endTime})`);
             return;
           }
         }
       }
-      await updateEvent(id, eventData);
+      await updateEvent(realId, eventData);
       handleCloseModal();
     },
     [updateEvent, handleCloseModal, checkRoomOverlap, events],
@@ -222,14 +226,15 @@ export function CalendarPage({ user }: CalendarPageProps) {
 
   const handleEventDrop = useCallback(
     async (eventId: string, newDate: Date, newStartTime: string, newEndTime: string) => {
-      const existing = events.find((e) => e.id === eventId);
+      const realId = getRealId(eventId);
+      const existing = events.find((e) => e.id === realId);
       if (!existing) return;
-      const conflict = checkRoomOverlap(existing.calendarId, newDate, newStartTime, newEndTime, eventId);
+      const conflict = checkRoomOverlap(existing.calendarId, newDate, newStartTime, newEndTime, realId);
       if (conflict) {
         setOverlapError(`Sala già occupata: "${conflict.title}" (${conflict.startTime}–${conflict.endTime})`);
         return;
       }
-      await updateEvent(eventId, { date: newDate, startTime: newStartTime, endTime: newEndTime });
+      await updateEvent(realId, { date: newDate, startTime: newStartTime, endTime: newEndTime });
     },
     [events, updateEvent, checkRoomOverlap],
   );
@@ -386,6 +391,7 @@ export function CalendarPage({ user }: CalendarPageProps) {
         profile={currentProfile}
         onSave={handleSaveProfile}
         onUpdatePassword={updatePassword}
+        push={push}
       />
 
       <SearchModal

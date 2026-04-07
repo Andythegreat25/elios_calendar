@@ -2,6 +2,14 @@ import { addDays, addWeeks, addMonths, isAfter, isBefore, isSameDay, startOfDay 
 import type { CalendarEvent } from '@/types';
 
 /**
+ * Restituisce l'ID reale dell'evento rimuovendo il suffisso data virtuale.
+ * Gli ID virtuali delle occorrenze ricorrenti hanno formato: {uuid}_{YYYY-MM-DD}
+ */
+export function getRealId(id: string): string {
+  return id.replace(/_\d{4}-\d{2}-\d{2}$/, '');
+}
+
+/**
  * Espande gli eventi ricorrenti in istanze virtuali per il range [rangeStart, rangeEnd].
  * Le istanze virtuali hanno id = "${originalId}_${dateString}" per distinguerle.
  * Gli eventi non ricorrenti vengono filtrati per il range.
