@@ -71,12 +71,11 @@ service cloud.firestore {
     // ===============================================================
     function isValidProfile(data) {
       return data.keys().hasAll(['uid', 'displayName', 'color']) &&
-             data.keys().hasOnly(['uid', 'displayName', 'color', 'photoURL', 'icsUrl']) &&
+             data.keys().hasOnly(['uid', 'displayName', 'color', 'photoURL']) &&
              data.uid is string && data.uid.size() > 0 && data.uid.size() < 100 &&
              data.displayName is string && data.displayName.size() > 0 && data.displayName.size() < 100 &&
              data.color is string && data.color.size() > 0 && data.color.size() < 20 &&
-             (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 50000)) &&
-             (!('icsUrl' in data) || (data.icsUrl is string && data.icsUrl.size() <= 2000));
+             (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 1000));
     }
 
     function isValidCalendar(data) {
@@ -91,7 +90,7 @@ service cloud.firestore {
 
     function isValidEvent(data) {
       return data.keys().hasAll(['title', 'date', 'startTime', 'endTime', 'calendarId', 'ownerId', 'createdAt']) &&
-             data.keys().hasOnly(['title', 'date', 'startTime', 'endTime', 'calendarId', 'description', 'ownerId', 'createdAt', 'recurrence']) &&
+             data.keys().hasOnly(['title', 'date', 'startTime', 'endTime', 'calendarId', 'description', 'ownerId', 'createdAt']) &&
              data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
              data.date is string && data.date.size() == 10 &&
              data.startTime is string && data.startTime.size() == 5 &&
@@ -99,8 +98,7 @@ service cloud.firestore {
              data.calendarId is string && data.calendarId.size() > 0 && data.calendarId.size() < 100 &&
              (!('description' in data) || (data.description is string && data.description.size() <= 1000)) &&
              data.ownerId is string && data.ownerId.size() > 0 && data.ownerId.size() < 100 &&
-             data.createdAt is string && isValidDateString(data.createdAt) &&
-             (!('recurrence' in data) || data.recurrence in ['none', 'daily', 'weekly', 'monthly']);
+             data.createdAt is string && isValidDateString(data.createdAt);
     }
 
     // ===============================================================
@@ -109,7 +107,9 @@ service cloud.firestore {
 
     match /profiles/{userId} {
       allow read: if isAuthenticated();
-      allow write: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidProfile(request.resource.data) && profileUidUnchanged();
+      allow update: if isOwner(userId) && isValidProfile(request.resource.data) && areImmutableFieldsUnchanged(['uid']);
+      allow delete: if isOwner(userId);
     }
 
     match /calendars/{calendarId} {
@@ -124,14 +124,6 @@ service cloud.firestore {
       allow create: if isAuthenticated() && isValidEvent(request.resource.data) && uidUnchanged();
       allow update: if isDocOwner() && isValidEvent(request.resource.data) && areImmutableFieldsUnchanged(['ownerId', 'createdAt']);
       allow delete: if isDocOwner();
-    }
-
-    // roomLocks: documenti di lock per giorno usati dalla transazione anti-double-booking.
-    // ID formato: "room_sala-riunioni_YYYY-MM-DD"
-    // Solo utenti autenticati possono leggere/scrivere (le scritture avvengono
-    // sempre all'interno di una transazione atomica insieme all'evento).
-    match /roomLocks/{lockId} {
-      allow read, write: if isAuthenticated();
     }
   }
 }

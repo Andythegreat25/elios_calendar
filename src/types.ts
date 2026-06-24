@@ -1,9 +1,29 @@
-/**
- * @deprecated Usa "@/types" (src/types/index.ts) invece di questo file.
- * Questo file esiste solo per retrocompatibilità durante il refactoring.
- * Verrà rimosso al completamento del Blocco 4.
- */
-export type { Profile }                        from './types/profile';
-export type { CalendarType, Calendar }         from './types/calendar';
-export type { CalendarEvent, FirestoreEvent }  from './types/event';
-export type { ViewType, SelectedSlot }         from './types/common';
+export type CalendarType = 'user' | 'room' | 'shared';
+
+export interface Profile {
+  uid: string;
+  displayName: string;
+  color: string;
+  photoURL?: string;
+}
+
+export interface Calendar {
+  id: string;
+  name: string;
+  color: string;
+  type: CalendarType;
+  ownerId: string;
+  visible?: boolean; // UI state only
+}
+
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  date: Date; // Keep Date for UI, but we'll store as string YYYY-MM-DD in Firestore
+  startTime: string; // "HH:mm"
+  endTime: string;   // "HH:mm"
+  calendarId: string;
+  description?: string;
+  ownerId: string;
+  createdAt: string;
+}

@@ -1,438 +1,573 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
+import { Sidebar } from './components/Sidebar';
+import { CalendarGrid } from './components/CalendarGrid';
+import { EventModal } from './components/EventModal';
+import { SettingsModal } from './components/SettingsModal';
+import { CalendarEvent, Calendar as CalendarType, Profile } from './types';
+import { format, addWeeks, subWeeks, addDays, subDays } from 'date-fns';
+import { it } from 'date-fns/locale';
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, LogOut, Eye, EyeOff } from 'lucide-react';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { CalendarPage } from './pages/CalendarPage';
-import { Logo, LogoFull } from './components/Logo';
-import { Spinner } from './components/ui/Spinner';
-import { useAuth } from './hooks/useAuth';
-import { useSessionTimeout } from './hooks/useSessionTimeout';
-import { SessionTimeoutModal } from './components/SessionTimeoutModal';
-import { Eye, EyeOff } from 'lucide-react';
+import { Logo } from './components/Logo';
 
-// ─── Loading ──────────────────────────────────────────────────────────────────
+import { db, auth } from './firebase';
+import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
+import { collection, doc, setDoc, onSnapshot, query, getDocFromServer, deleteDoc } from 'firebase/firestore';
 
-function LoadingScreen({ isReady }: { isReady: boolean }) {
-  return (
-    <div
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center"
-      style={{
-        backgroundColor: '#0f0f11',
-        backgroundImage: `
-          radial-gradient(circle at 0% 20%,   rgba(168,129,243,0.25), transparent 35%),
-          radial-gradient(circle at 100% 80%,  rgba(45,212,191,0.2),  transparent 35%),
-          radial-gradient(circle at 50% 100%,  rgba(244,114,182,0.2), transparent 35%)
-        `,
-        transition: 'opacity 0.4s ease',
-        opacity: isReady ? 0 : 1,
-        pointerEvents: isReady ? 'none' : 'all',
-      }}
-    >
-      {/* Cerchi decorativi blurrati */}
-      <div className="absolute w-64 h-64 rounded-full pointer-events-none"
-           style={{ background: 'rgba(168,129,243,0.08)', filter: 'blur(60px)', top: '20%', left: '15%' }} />
-      <div className="absolute w-48 h-48 rounded-full pointer-events-none"
-           style={{ background: 'rgba(45,212,191,0.08)', filter: 'blur(50px)', bottom: '20%', right: '15%' }} />
-
-      {/* Logo completo con animazione */}
-      <div className="splash-logo-reveal mb-3">
-        <div className="splash-logo-spin">
-          <LogoFull variant="light" />
-        </div>
-      </div>
-
-      {/* Tagline */}
-      <p className="splash-tagline text-sm mb-10 mt-4"
-         style={{ color: 'rgba(255,255,255,0.38)', fontFamily: 'Inter, sans-serif', letterSpacing: '0.06em' }}>
-        Calendario enterprise del team
-      </p>
-
-      {/* Progress bar */}
-      <div className="splash-bar-wrap overflow-hidden rounded-full"
-           style={{ width: 220, height: 3, background: 'rgba(255,255,255,0.08)' }}>
-        <div className="splash-bar-fill h-full rounded-full"
-             style={{ background: 'linear-gradient(90deg, #a881f3, #2dd4bf)' }} />
-      </div>
-    </div>
-  );
+enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
 }
 
-// ─── Login ────────────────────────────────────────────────────────────────────
-
-interface LoginScreenProps {
-  onEmailLogin: (email: string, password: string, remember: boolean) => Promise<void>;
-  onEmailRegister: (email: string, password: string) => Promise<void>;
-  onResetPassword: (email: string) => Promise<void>;
-  isLoading: boolean;
-  error: string | null;
-  onClearError: () => void;
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: any;
 }
 
-function LoginScreen({
-  onEmailLogin, onEmailRegister, onResetPassword,
-  isLoading, error, onClearError,
-}: LoginScreenProps) {
-  const [mode, setMode] = useState<'login' | 'register' | 'forgot'>('login');
-  const [email, setEmail] = useState(() => localStorage.getItem('elios_last_email') ?? '');
-  const [password, setPassword] = useState('');
-  const [remember, setRemember] = useState(true);
+function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+    },
+    operationType,
+    path
+  };
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
+
+function CalendarApp() {
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [view, setView] = useState<'day' | 'week'>('week');
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [calendars, setCalendars] = useState<CalendarType[]>([]);
+  const [profiles, setProfiles] = useState<Profile[]>([]);
+  
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [selectedSlot, setSelectedSlot] = useState<{ date: Date; time: string } | null>(null);
+  const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null);
+
+  const [user, setUser] = useState(auth.currentUser);
+  const [isAuthReady, setIsAuthReady] = useState(false);
+
+  // Auth UI state
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authError, setAuthError] = useState('');
+  const [isRegistering, setIsRegistering] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-
-  const handleChange = (setter: (v: string) => void) => (e: React.ChangeEvent<HTMLInputElement>) => {
-    onClearError();
-    setter(e.target.value);
-  };
-
-  const [resetSent, setResetSent] = useState(false);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (mode === 'login') {
-      if (remember) localStorage.setItem('elios_last_email', email);
-      else localStorage.removeItem('elios_last_email');
-      await onEmailLogin(email, password, remember);
-    } else if (mode === 'register') {
-      await onEmailRegister(email, password);
-    } else {
-      await onResetPassword(email);
-      if (!error) setResetSent(true);
-    }
-  };
-
-  const switchMode = () => {
-    setMode((m) => (m === 'login' ? 'register' : 'login'));
-    setResetSent(false);
-    onClearError();
-  };
-
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-[#FAFAFA] p-4">
-      <div className="bg-white p-10 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.06)] border border-zinc-100 max-w-sm w-full">
-
-        {/* Logo + titolo */}
-        <div className="flex flex-col items-center mb-8">
-          <Logo className="w-14 h-14 mb-5" />
-          <h1 className="text-2xl font-semibold text-zinc-900 tracking-tight">
-            Elios Workspace
-          </h1>
-          <p className="text-zinc-400 mt-2 text-sm text-center leading-relaxed">
-            {mode === 'login' && 'Accedi per gestire gli appuntamenti del team.'}
-            {mode === 'register' && 'Crea un account per unirti al team.'}
-            {mode === 'forgot' && 'Inserisci la tua email per ricevere il link di reset.'}
-          </p>
-        </div>
-
-        {/* Form email/password */}
-        {resetSent && (
-          <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-sm text-green-700 font-medium mb-4">
-            Email inviata! Controlla la casella e clicca il link per reimpostare la password.
-          </div>
-        )}
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <input
-            id="email"
-            name="email"
-            type="email"
-            placeholder="Email aziendale"
-            value={email}
-            onChange={handleChange(setEmail)}
-            required
-            autoComplete="email"
-            className="w-full px-4 py-3 rounded-xl border border-zinc-200 bg-zinc-50 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-400 transition-all"
-          />
-
-          {mode !== 'forgot' && (
-            <div className="relative">
-              <input
-                id="password"
-                name="password"
-                type={showPassword ? 'text' : 'password'}
-                placeholder="Password"
-                value={password}
-                onChange={handleChange(setPassword)}
-                required
-                autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-                className="w-full px-4 py-3 pr-11 rounded-xl border border-zinc-200 bg-zinc-50 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-400 transition-all"
-              />
-              <button
-                type="button"
-                tabIndex={-1}
-                onClick={() => setShowPassword((v) => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 transition-colors"
-              >
-                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-          )}
-
-          {/* Link "Password dimenticata?" visibile solo nel login */}
-          {mode === 'login' && (
-            <div className="text-right -mt-1">
-              <button
-                type="button"
-                onClick={() => { setMode('forgot'); setResetSent(false); onClearError(); }}
-                className="text-xs text-zinc-400 hover:text-zinc-700 transition-colors"
-              >
-                Password dimenticata?
-              </button>
-            </div>
-          )}
-
-          {/* Ricordami (solo in modalità login) */}
-          {mode === 'login' && (
-            <label className="flex items-center gap-2.5 cursor-pointer select-none pt-1">
-              <div className="relative flex items-center justify-center">
-                <input
-                  type="checkbox"
-                  checked={remember}
-                  onChange={(e) => setRemember(e.target.checked)}
-                  className="appearance-none w-4 h-4 border border-zinc-300 rounded checked:bg-zinc-900 checked:border-zinc-900 transition-colors"
-                />
-                {remember && (
-                  <svg className="w-2.5 h-2.5 text-white absolute pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                  </svg>
-                )}
-              </div>
-              <span className="text-sm text-zinc-600">Ricordami</span>
-            </label>
-          )}
-
-          {/* Errore */}
-          {error && (
-            <p className="text-sm text-red-500 bg-red-50 border border-red-100 rounded-xl px-4 py-2.5">
-              {error}
-            </p>
-          )}
-
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="w-full bg-zinc-900 text-white rounded-xl py-3 px-4 font-medium hover:bg-zinc-800 transition-all shadow-sm flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed mt-1"
-          >
-            {isLoading ? (
-              <Spinner size="sm" className="border-zinc-500 border-t-white" />
-            ) : (
-              mode === 'login' ? 'Accedi' : mode === 'register' ? 'Crea account' : 'Invia email di reset'
-            )}
-          </button>
-        </form>
-
-        {/* Toggle login / registrazione / torna al login */}
-        <p className="text-center text-sm text-zinc-400 mt-6">
-          {mode === 'forgot' ? (
-            <button
-              type="button"
-              onClick={() => { setMode('login'); setResetSent(false); onClearError(); }}
-              className="text-zinc-700 font-medium hover:text-zinc-900 transition-colors underline underline-offset-2"
-            >
-              ← Torna al login
-            </button>
-          ) : (
-            <>
-              {mode === 'login' ? 'Non hai un account?' : 'Hai già un account?'}{' '}
-              <button
-                type="button"
-                onClick={switchMode}
-                className="text-zinc-700 font-medium hover:text-zinc-900 transition-colors underline underline-offset-2"
-              >
-                {mode === 'login' ? 'Registrati' : 'Accedi'}
-              </button>
-            </>
-          )}
-        </p>
-      </div>
-    </div>
-  );
-}
-
-// ─── Reset password ───────────────────────────────────────────────────────────
-
-interface ResetPasswordScreenProps {
-  onUpdatePassword: (newPassword: string) => Promise<void>;
-  isLoading: boolean;
-  error: string | null;
-  onClearError: () => void;
-}
-
-function ResetPasswordScreen({ onUpdatePassword, isLoading, error, onClearError }: ResetPasswordScreenProps) {
-  const [password, setPassword] = useState('');
-  const [confirm, setConfirm] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [localError, setLocalError] = useState<string | null>(null);
-
-  const handleChange = (setter: (v: string) => void) => (e: React.ChangeEvent<HTMLInputElement>) => {
-    onClearError();
-    setLocalError(null);
-    setter(e.target.value);
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (password.length < 6) {
-      setLocalError('La password deve avere almeno 6 caratteri.');
-      return;
-    }
-    if (password !== confirm) {
-      setLocalError('Le password non coincidono.');
-      return;
-    }
-    await onUpdatePassword(password);
-  };
-
-  const displayError = localError ?? error;
-
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-[#FAFAFA] p-4">
-      <div className="bg-white p-10 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.06)] border border-zinc-100 max-w-sm w-full">
-
-        {/* Logo + titolo */}
-        <div className="flex flex-col items-center mb-8">
-          <Logo className="w-14 h-14 mb-5" />
-          <h1 className="text-2xl font-semibold text-zinc-900 tracking-tight">
-            Nuova password
-          </h1>
-          <p className="text-zinc-400 mt-2 text-sm text-center leading-relaxed">
-            Scegli una nuova password per il tuo account.
-          </p>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-3">
-          {/* Nuova password */}
-          <div className="relative">
-            <input
-              type={showPassword ? 'text' : 'password'}
-              placeholder="Nuova password"
-              value={password}
-              onChange={handleChange(setPassword)}
-              required
-              autoComplete="new-password"
-              className="w-full px-4 py-3 pr-11 rounded-xl border border-zinc-200 bg-zinc-50 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-400 transition-all"
-            />
-            <button
-              type="button"
-              tabIndex={-1}
-              onClick={() => setShowPassword((v) => !v)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 transition-colors"
-            >
-              {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-            </button>
-          </div>
-
-          {/* Conferma password */}
-          <input
-            type={showPassword ? 'text' : 'password'}
-            placeholder="Conferma password"
-            value={confirm}
-            onChange={handleChange(setConfirm)}
-            required
-            autoComplete="new-password"
-            className="w-full px-4 py-3 rounded-xl border border-zinc-200 bg-zinc-50 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-400 transition-all"
-          />
-
-          {/* Errore */}
-          {displayError && (
-            <p className="text-sm text-red-500 bg-red-50 border border-red-100 rounded-xl px-4 py-2.5">
-              {displayError}
-            </p>
-          )}
-
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="w-full bg-zinc-900 text-white rounded-xl py-3 px-4 font-medium hover:bg-zinc-800 transition-all shadow-sm flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed mt-1"
-          >
-            {isLoading ? <Spinner size="sm" className="border-zinc-500 border-t-white" /> : 'Salva nuova password'}
-          </button>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-// ─── Auth gate ────────────────────────────────────────────────────────────────
-
-function AuthGate() {
-  const {
-    user, isAuthReady, isLoggingIn, isRecoveryMode,
-    loginEmail, registerEmail, resetPassword, updatePassword,
-    logoutUser, error, clearError,
-  } = useAuth();
-
-  const [showTimeoutWarning, setShowTimeoutWarning] = useState(false);
-  const [minTimeElapsed, setMinTimeElapsed] = useState(false);
 
   useEffect(() => {
-    const t = setTimeout(() => setMinTimeElapsed(true), 2000);
-    return () => clearTimeout(t);
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      setUser(currentUser);
+      setIsAuthReady(true);
+      
+      if (currentUser) {
+        // Test connection
+        try {
+          await getDocFromServer(doc(db, 'test', 'connection'));
+        } catch (error) {
+          if(error instanceof Error && error.message.includes('the client is offline')) {
+            console.error("Please check your Firebase configuration.");
+          }
+        }
+
+        // Create or update profile
+        const profileRef = doc(db, 'profiles', currentUser.uid);
+        try {
+          const profileSnap = await getDocFromServer(profileRef);
+          if (!profileSnap.exists()) {
+            await setDoc(profileRef, {
+              uid: currentUser.uid,
+              displayName: currentUser.displayName || 'Utente',
+              color: '#10b981',
+              photoURL: currentUser.photoURL || ''
+            });
+          }
+        } catch (err) {
+          handleFirestoreError(err, OperationType.WRITE, 'profiles');
+        }
+
+        // Create personal calendar if it doesn't exist
+        const defaultCalRef = doc(db, 'calendars', currentUser.uid);
+        try {
+          await setDoc(defaultCalRef, {
+            id: currentUser.uid,
+            name: currentUser.displayName ? `Calendario di ${currentUser.displayName}` : 'Il mio calendario',
+            color: '#10b981',
+            type: 'user',
+            ownerId: currentUser.uid
+          }, { merge: true });
+        } catch (err) {
+          handleFirestoreError(err, OperationType.WRITE, 'calendars');
+        }
+
+        // Create Sala Riunioni if it doesn't exist
+        const roomCalRef = doc(db, 'calendars', 'sala-riunioni');
+        try {
+          await setDoc(roomCalRef, {
+            id: 'sala-riunioni',
+            name: 'Sala Riunioni',
+            color: '#6366f1',
+            type: 'room',
+            ownerId: currentUser.uid // Just assign to the first user who logs in
+          }, { merge: true });
+        } catch (err) {
+          handleFirestoreError(err, OperationType.WRITE, 'calendars');
+        }
+      }
+    });
+    return () => unsubscribe();
   }, []);
 
-  const handleWarn   = useCallback(() => setShowTimeoutWarning(true),  []);
-  const handleAutoLogout = useCallback(async () => {
-    setShowTimeoutWarning(false);
-    await logoutUser();
-  }, [logoutUser]);
+  useEffect(() => {
+    if (!isAuthReady || !user) return;
 
-  const { resetTimers } = useSessionTimeout({
-    isActive: !!user && !isRecoveryMode,
-    onWarn:   handleWarn,
-    onLogout: handleAutoLogout,
-  });
+    const unsubProfiles = onSnapshot(collection(db, 'profiles'), (snapshot) => {
+      const loadedProfiles = snapshot.docs.map(doc => doc.data() as Profile);
+      setProfiles(loadedProfiles);
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'profiles'));
 
-  const handleStay = useCallback(() => {
-    setShowTimeoutWarning(false);
-    resetTimers();
-  }, [resetTimers]);
+    const unsubCalendars = onSnapshot(collection(db, 'calendars'), (snapshot) => {
+      setCalendars(prevCalendars => {
+        const prevVisibility = new Map(prevCalendars.map(c => [c.id, c.visible]));
+        return snapshot.docs.map(doc => {
+          const data = doc.data();
+          return {
+            id: data.id,
+            name: data.ownerId === user.uid && data.type === 'user' ? 'Il mio calendario' : data.name,
+            color: data.color,
+            type: data.type,
+            ownerId: data.ownerId,
+            visible: prevVisibility.has(data.id) ? prevVisibility.get(data.id) : true
+          } as CalendarType;
+        });
+      });
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'calendars'));
 
-  const splashDone = isAuthReady && minTimeElapsed;
+    const unsubEvents = onSnapshot(collection(db, 'events'), (snapshot) => {
+      const loadedEvents = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          title: data.title,
+          date: new Date(data.date),
+          startTime: data.startTime,
+          endTime: data.endTime,
+          calendarId: data.calendarId,
+          description: data.description,
+          ownerId: data.ownerId,
+          createdAt: data.createdAt
+        } as CalendarEvent;
+      });
+      setEvents(loadedEvents);
+    }, (error) => handleFirestoreError(error, OperationType.LIST, 'events'));
+
+    return () => {
+      unsubProfiles();
+      unsubCalendars();
+      unsubEvents();
+    };
+  }, [isAuthReady, user]);
+
+  const handleLogin = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setAuthError('');
+    if (authEmail && authPassword) {
+      try {
+        if (isRegistering) {
+          await createUserWithEmailAndPassword(auth, authEmail, authPassword);
+        } else {
+          await signInWithEmailAndPassword(auth, authEmail, authPassword);
+        }
+      } catch (error: any) {
+        console.error('Auth error:', error);
+        if (error.code === 'auth/network-request-failed') {
+          setAuthError('Errore di rete. Controlla la connessione.');
+        } else if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found') {
+          setAuthError('Credenziali non valide.');
+        } else if (error.code === 'auth/email-already-in-use') {
+          setAuthError('Email già in uso.');
+        } else {
+          setAuthError(error.message);
+        }
+      }
+    } else {
+      const provider = new GoogleAuthProvider();
+      try {
+        await signInWithPopup(auth, provider);
+      } catch (error) {
+        console.error('Login error:', error);
+      }
+    }
+  };
+
+  const handleLogout = () => {
+    signOut(auth);
+  };
+
+  const handleSaveProfile = async (updates: Partial<Profile>) => {
+    if (!user) return;
+    try {
+      const profileRef = doc(db, 'profiles', user.uid);
+      await setDoc(profileRef, updates, { merge: true });
+      
+      // Also update the user's personal calendar name and color if they match
+      const userCalendar = calendars.find(c => c.ownerId === user.uid && c.type === 'user');
+      if (userCalendar) {
+        const calendarRef = doc(db, 'calendars', userCalendar.id);
+        await setDoc(calendarRef, {
+          name: updates.displayName ? `Calendario di ${updates.displayName}` : userCalendar.name,
+          color: updates.color || userCalendar.color
+        }, { merge: true });
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, 'profiles');
+    }
+  };
+
+  if (!isAuthReady) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#FAFAFA]">
+        <div className="animate-pulse flex flex-col items-center">
+          <div className="w-12 h-12 flex items-center justify-center mb-6">
+            <Logo className="w-12 h-12" />
+          </div>
+          <p className="text-zinc-400 font-medium tracking-wide text-sm uppercase">Inizializzazione...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#FAFAFA] p-4">
+        <div className="bg-white p-10 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-zinc-100 max-w-sm w-full">
+          <div className="text-center">
+            <div className="w-16 h-16 flex items-center justify-center mx-auto mb-8">
+              <Logo className="w-16 h-16" />
+            </div>
+            <h1 className="text-2xl font-semibold text-zinc-900 mb-3 tracking-tight">Elios Workspace</h1>
+            <p className="text-zinc-500 mb-8 text-sm leading-relaxed">Accedi per gestire gli appuntamenti del team.</p>
+          </div>
+
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div className="relative">
+              <input
+                type="email"
+                placeholder="addey@eliosambiente.it"
+                value={authEmail}
+                onChange={(e) => setAuthEmail(e.target.value)}
+                className="w-full px-4 py-3.5 bg-zinc-50/50 border border-zinc-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-900 transition-all text-sm placeholder:text-zinc-800 font-medium"
+                required
+              />
+              <div className="absolute inset-y-0 right-4 flex items-center pointer-events-none">
+                <div className="w-5 h-5 bg-[#10b981] rounded-sm opacity-80 flex items-center justify-center">
+                  <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                </div>
+              </div>
+            </div>
+
+            <div className="relative">
+              <input
+                type={showPassword ? "text" : "password"}
+                placeholder="••••••••••••"
+                value={authPassword}
+                onChange={(e) => setAuthPassword(e.target.value)}
+                className="w-full px-4 py-3.5 bg-zinc-50/50 border border-zinc-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-zinc-900/10 focus:border-zinc-900 transition-all text-sm font-medium tracking-widest placeholder:tracking-normal"
+                required
+              />
+              <button 
+                type="button" 
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute inset-y-0 right-4 flex items-center text-zinc-400 hover:text-zinc-600 transition-colors"
+              >
+                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between pt-1 pb-4">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" className="w-4 h-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-900" defaultChecked />
+                <span className="text-sm font-medium text-zinc-600">Ricordami</span>
+              </label>
+              {!isRegistering && (
+                <button type="button" className="text-sm text-zinc-400 hover:text-zinc-600 transition-colors">
+                  Password dimenticata?
+                </button>
+              )}
+            </div>
+
+            {authError && (
+              <div className="p-3.5 rounded-xl bg-red-50 text-red-600 text-sm font-medium text-center border border-red-100/50">
+                {authError}
+              </div>
+            )}
+
+            <button
+              type="submit"
+              className="w-full bg-zinc-900 text-white rounded-xl py-3.5 px-4 font-semibold hover:bg-zinc-800 transition-all shadow-sm"
+            >
+              {isRegistering ? 'Registrati' : 'Accedi'}
+            </button>
+            
+            <div className="text-center pt-6">
+              <span className="text-sm text-zinc-400">
+                {isRegistering ? 'Hai già un account? ' : 'Non hai un account? '}
+              </span>
+              <button 
+                type="button" 
+                onClick={() => { setIsRegistering(!isRegistering); setAuthError(''); }}
+                className="text-sm font-medium text-zinc-900 underline underline-offset-4 hover:text-zinc-600 transition-colors"
+              >
+                {isRegistering ? 'Accedi' : 'Registrati'}
+              </button>
+            </div>
+            
+            <div className="relative py-4">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-zinc-100"></div>
+              </div>
+              <div className="relative flex justify-center text-xs">
+                <span className="bg-white px-2 text-zinc-400 uppercase tracking-widest font-medium">Oppure</span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => handleLogin()}
+              className="w-full bg-white text-zinc-700 border border-zinc-200 rounded-xl py-3 px-4 font-medium hover:bg-zinc-50 transition-all flex items-center justify-center gap-3"
+            >
+              <svg className="w-5 h-5" viewBox="0 0 24 24">
+                <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+              </svg>
+              Continua con Google
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  const handleToggleCalendar = (id: string) => {
+    setCalendars(calendars.map(c => c.id === id ? { ...c, visible: !c.visible } : c));
+  };
+
+  const handleColorChange = async (id: string, color: string) => {
+    if (!user) return;
+    const calRef = doc(db, 'calendars', id);
+    try {
+      await setDoc(calRef, { color }, { merge: true });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, 'calendars');
+    }
+  };
+
+  const handlePrev = () => {
+    if (view === 'week') {
+      setCurrentDate(subWeeks(currentDate, 1));
+    } else {
+      setCurrentDate(subDays(currentDate, 1));
+    }
+  };
+
+  const handleNext = () => {
+    if (view === 'week') {
+      setCurrentDate(addWeeks(currentDate, 1));
+    } else {
+      setCurrentDate(addDays(currentDate, 1));
+    }
+  };
+
+  const handleToday = () => {
+    setCurrentDate(new Date());
+  };
+
+  const handleSlotClick = (date: Date, time: string) => {
+    setSelectedSlot({ date, time });
+    setEditingEvent(null);
+    setIsModalOpen(true);
+  };
+
+  const handleNewEvent = () => {
+    setSelectedSlot(null);
+    setEditingEvent(null);
+    setIsModalOpen(true);
+  };
+
+  const handleSaveEvent = async (eventData: Omit<CalendarEvent, 'id' | 'ownerId' | 'createdAt'>) => {
+    if (!user) return;
+    
+    const newEventId = Math.random().toString(36).substr(2, 9);
+    const eventRef = doc(db, 'events', newEventId);
+    
+    try {
+      await setDoc(eventRef, {
+        title: eventData.title,
+        date: format(eventData.date, 'yyyy-MM-dd'),
+        startTime: eventData.startTime,
+        endTime: eventData.endTime,
+        calendarId: eventData.calendarId,
+        description: eventData.description || '',
+        ownerId: user.uid,
+        createdAt: new Date().toISOString()
+      });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, 'events');
+    }
+  };
+
+  const handleUpdateEvent = async (id: string, eventData: Partial<Omit<CalendarEvent, 'id' | 'ownerId' | 'createdAt'>>) => {
+    if (!user) return;
+    
+    const eventRef = doc(db, 'events', id);
+    
+    try {
+      const updateData: any = { ...eventData };
+      if (eventData.date) {
+        updateData.date = format(eventData.date, 'yyyy-MM-dd');
+      }
+      await setDoc(eventRef, updateData, { merge: true });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, 'events');
+    }
+  };
+
+  const handleDeleteEvent = async (id: string) => {
+    if (!user) return;
+    
+    const eventRef = doc(db, 'events', id);
+    
+    try {
+      await deleteDoc(eventRef);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, 'events');
+    }
+  };
+
+  const handleEventClick = (event: CalendarEvent) => {
+    setEditingEvent(event);
+    setSelectedSlot(null);
+    setIsModalOpen(true);
+  };
 
   return (
-    <>
-      {/* Splash screen premium: overlay che svanisce quando auth è pronta E timer minimo trascorso */}
-      <LoadingScreen isReady={splashDone} />
+    <div className="min-h-screen p-4 sm:p-8 flex items-center justify-center">
+      <div className="w-full max-w-[1400px] h-[90vh] min-h-[700px] bg-white rounded-[2.5rem] shadow-2xl overflow-hidden flex border border-white/10">
+        <Sidebar
+          calendars={calendars}
+          events={events}
+          profile={profiles.find(p => p.uid === user?.uid) || null}
+          onToggleCalendar={handleToggleCalendar}
+          onColorChange={handleColorChange}
+          onNewEvent={handleNewEvent}
+          currentDate={currentDate}
+          onDateSelect={setCurrentDate}
+          user={user}
+          onLogout={handleLogout}
+          onOpenSettings={() => setIsSettingsOpen(true)}
+        />
 
-      {/* Contenuto reale — visibile solo dopo che la splash è terminata */}
-      {splashDone && (() => {
-        if (isRecoveryMode) {
-          return (
-            <ResetPasswordScreen
-              onUpdatePassword={updatePassword}
-              isLoading={isLoggingIn}
-              error={error}
-              onClearError={clearError}
+        <main className="flex-1 flex flex-col min-w-0 bg-white">
+          <header className="h-24 px-10 flex items-center justify-between border-b border-zinc-100 bg-white flex-shrink-0">
+            <div className="flex items-center gap-6">
+              <h1 className="text-3xl font-medium text-zinc-900 capitalize tracking-tight">
+                {format(currentDate, 'MMMM, yyyy', { locale: it })}
+              </h1>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handlePrev}
+                  className="p-2.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-900 rounded-full transition-all"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={handleToday}
+                  className="px-5 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-100 rounded-full transition-all"
+                >
+                  Oggi
+                </button>
+                <button
+                  onClick={handleNext}
+                  className="p-2.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-900 rounded-full transition-all"
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+            
+            <div className="flex items-center bg-zinc-100/50 p-1 rounded-full border border-zinc-200/50">
+              <button
+                onClick={() => setView('day')}
+                className={`px-6 py-2 text-sm font-medium rounded-full transition-all ${
+                  view === 'day' ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500 hover:text-zinc-900'
+                }`}
+              >
+                Giorno
+              </button>
+              <button
+                onClick={() => setView('week')}
+                className={`px-6 py-2 text-sm font-medium rounded-full transition-all ${
+                  view === 'week' ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-500 hover:text-zinc-900'
+                }`}
+              >
+                Settimana
+              </button>
+            </div>
+          </header>
+
+          <div className="flex-1 p-6 overflow-hidden">
+            <CalendarGrid
+              currentDate={currentDate}
+              view={view}
+              events={events}
+              calendars={calendars}
+              onSlotClick={handleSlotClick}
+              onEventClick={handleEventClick}
             />
-          );
-        }
-        if (!user) {
-          return (
-            <LoginScreen
-              onEmailLogin={loginEmail}
-              onEmailRegister={registerEmail}
-              onResetPassword={resetPassword}
-              isLoading={isLoggingIn}
-              error={error}
-              onClearError={clearError}
-            />
-          );
-        }
-        return (
-          <>
-            <CalendarPage user={user} />
-            {showTimeoutWarning && (
-              <SessionTimeoutModal
-                onStay={handleStay}
-                onLogout={handleAutoLogout}
-              />
-            )}
-          </>
-        );
-      })()}
-    </>
+          </div>
+        </main>
+
+        <EventModal
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          onSave={handleSaveEvent}
+          onUpdate={handleUpdateEvent}
+          onDelete={handleDeleteEvent}
+          initialDate={selectedSlot?.date}
+          initialTime={selectedSlot?.time}
+          calendars={calendars}
+          editEvent={editingEvent}
+          currentUserId={user?.uid}
+        />
+
+        <SettingsModal
+          isOpen={isSettingsOpen}
+          onClose={() => setIsSettingsOpen(false)}
+          profile={profiles.find(p => p.uid === user?.uid) || null}
+          onSave={handleSaveProfile}
+        />
+      </div>
+    </div>
   );
 }
 
 export default function App() {
   return (
     <ErrorBoundary>
-      <AuthGate />
+      <CalendarApp />
     </ErrorBoundary>
   );
 }
