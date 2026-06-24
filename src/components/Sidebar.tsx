@@ -5,11 +5,13 @@ import { it } from 'date-fns/locale';
 import { useState, useEffect } from 'react';
 import { clsx } from 'clsx';
 import { Logo } from './Logo';
+import { MeetingsChart } from './MeetingsChart';
 
 interface SidebarProps {
   calendars: CalendarType[];
   events: CalendarEvent[];
   profile: Profile | null;
+  profiles: Profile[];
   onToggleCalendar: (id: string) => void;
   onColorChange?: (id: string, color: string) => void;
   onNewEvent: () => void;
@@ -49,7 +51,7 @@ function ColorPicker({ color, onChange }: { color: string, onChange: (color: str
   );
 }
 
-export function Sidebar({ calendars, events, profile, onToggleCalendar, onColorChange, onNewEvent, currentDate, onDateSelect, user, onLogout, onOpenSettings }: SidebarProps) {
+export function Sidebar({ calendars, events, profile, profiles, onToggleCalendar, onColorChange, onNewEvent, currentDate, onDateSelect, user, onLogout, onOpenSettings }: SidebarProps) {
   const [miniCalendarDate, setMiniCalendarDate] = useState(currentDate);
 
   const monthStart = startOfMonth(miniCalendarDate);
@@ -89,6 +91,13 @@ export function Sidebar({ calendars, events, profile, onToggleCalendar, onColorC
 
   const nextEvent = upcomingEvents[0];
   const nextEventCalendar = nextEvent ? calendars.find(c => c.id === nextEvent.calendarId) : null;
+  let nextEventCalendarName = nextEventCalendar?.name || 'Evento';
+  if (nextEventCalendar?.type === 'user' && nextEventCalendar.ownerId !== user?.uid) {
+    const nextEventProfile = profiles.find(p => p.uid === nextEventCalendar.ownerId);
+    if (nextEventProfile?.displayName && nextEventProfile.displayName !== 'Utente') {
+      nextEventCalendarName = nextEventProfile.displayName;
+    }
+  }
 
   return (
     <aside className="w-[320px] bg-[#1C1C1E] text-white flex flex-col h-full overflow-y-auto flex-shrink-0">
@@ -186,7 +195,7 @@ export function Sidebar({ calendars, events, profile, onToggleCalendar, onColorC
             </h3>
             <div className="flex gap-2">
               <div className="px-3 py-1.5 rounded-full border border-white/20 text-xs text-zinc-300 truncate max-w-full">
-                {nextEventCalendar?.name || 'Evento'}
+                {nextEventCalendarName}
               </div>
             </div>
           </div>
@@ -242,12 +251,23 @@ export function Sidebar({ calendars, events, profile, onToggleCalendar, onColorC
               const userEventsCount = events.filter(e => e.calendarId === user.id && isSameDay(new Date(e.date), currentDate)).length;
               const maxEvents = Math.max(...users.map(u => events.filter(e => e.calendarId === u.id && isSameDay(new Date(e.date), currentDate)).length), 1);
               const percentage = Math.min(100, Math.max(5, (userEventsCount / maxEvents) * 100));
+              const userProfile = profiles.find(p => p.uid === user.ownerId);
+              const displayName = userProfile?.displayName && userProfile.displayName !== 'Utente' ? userProfile.displayName : user.name;
               
               return (
                 <div key={user.id} className="flex items-center justify-between group">
                   <label className="flex items-center gap-3 cursor-pointer flex-1">
-                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: user.color }} />
-                    <span className="text-xs text-zinc-300 font-medium">{user.name}</span>
+                    <div className="relative flex items-center justify-center">
+                      <input
+                        type="checkbox"
+                        checked={user.visible}
+                        onChange={() => onToggleCalendar(user.id)}
+                        className="appearance-none w-4 h-4 border border-zinc-600 rounded-sm checked:border-transparent transition-colors group-hover:border-zinc-400"
+                        style={{ backgroundColor: user.visible ? user.color : 'transparent' }}
+                      />
+                      {user.visible && <svg className="w-2.5 h-2.5 text-white absolute pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                    </div>
+                    <span className="text-xs text-zinc-300 font-medium">{displayName}</span>
                   </label>
                   {userEventsCount > 0 && (
                     <div className="w-16 h-1 bg-white/10 rounded-full overflow-hidden">
@@ -259,6 +279,8 @@ export function Sidebar({ calendars, events, profile, onToggleCalendar, onColorC
             })}
           </div>
         </div>
+        
+        <MeetingsChart events={events} currentDate={currentDate} />
       </div>
     </aside>
   );

@@ -158,7 +158,7 @@ export function EventModal({ isOpen, onClose, onSave, onUpdate, onDelete, initia
                   disabled={!isOwner}
                   className="w-full bg-zinc-50/50 border border-zinc-200/60 text-zinc-900 text-sm rounded-2xl focus:ring-zinc-900 focus:border-zinc-900 block px-4 py-3 disabled:opacity-70 transition-all font-medium appearance-none"
                 >
-                  {calendars.map(c => (
+                  {calendars.filter(c => c.ownerId === currentUserId || c.type === 'room').map(c => (
                     <option key={c.id} value={c.id}>
                       {c.name}
                     </option>

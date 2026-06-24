@@ -13,6 +13,7 @@ import { Logo } from './components/Logo';
 import { db, auth } from './firebase';
 import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { collection, doc, setDoc, onSnapshot, query, getDocFromServer, deleteDoc } from 'firebase/firestore';
+import { useNotifications } from './hooks/useNotifications';
 
 enum OperationType {
   CREATE = 'create',
@@ -65,6 +66,8 @@ function CalendarApp() {
   const [authError, setAuthError] = useState('');
   const [isRegistering, setIsRegistering] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  useNotifications(events, user?.uid);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -470,6 +473,7 @@ function CalendarApp() {
           calendars={calendars}
           events={events}
           profile={profiles.find(p => p.uid === user?.uid) || null}
+          profiles={profiles}
           onToggleCalendar={handleToggleCalendar}
           onColorChange={handleColorChange}
           onNewEvent={handleNewEvent}
